@@ -1,8 +1,8 @@
 name: Daily Digest
 
 on:
-  schedule:
-    - cron: '0 * * * *'
+  repository_dispatch:
+    types: [cron-trigger]
   workflow_dispatch:
 
 jobs:
