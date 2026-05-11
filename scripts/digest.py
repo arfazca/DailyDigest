@@ -64,12 +64,7 @@ def parse_command(body: str):
     if not clean:
         return ("none", None)
     lines = [l.strip() for l in clean.splitlines() if l.strip()]
-    bullets = [re.match(r"^[-*+]\s+(.*)$", l) for l in lines]
-    if len(lines) >= 2 and all(bullets):
-        return ("replace", [b.group(1).strip() for b in bullets])
     first = lines[0]
-    if first.lower() == "clear":
-        return ("clear", None)
     m = re.match(r"^(add|remove|done|del|delete)\s*:\s*(.+)$", first, re.IGNORECASE)
     if m:
         action = m.group(1).lower()
@@ -106,7 +101,7 @@ def process_inbox():
     log(f"INBOX select: {status}")
 
     since  = (NOW - timedelta(hours=36)).strftime("%d-%b-%Y")
-    search = f'(SINCE "{since}" TO "{FROM_EMAIL}" SUBJECT "Re: Daily digest")'
+    search = f'(SINCE "{since}" TO "{FROM_EMAIL}")'
     log(f"IMAP search: {search}")
 
     typ, data = M.search(None, search)
@@ -145,14 +140,6 @@ def process_inbox():
             else:
                 log(f"  No task matched '{payload}'")
                 unknown_attempts.append(f'Tried to remove "{payload}" but nothing matched')
-        elif action == "clear":
-            if tasks:
-                summaries.append("Cleared all tasks")
-            tasks = []
-        elif action == "replace":
-            count = len(payload)
-            summaries.append(f"Replaced list ({count} item{'s' if count != 1 else ''})")
-            tasks = payload
         elif action == "unknown":
             log(f"  Unrecognised: {payload!r}")
             unknown_attempts.append(payload)
@@ -236,7 +223,7 @@ def send_digest(events, tasks):
         tasks=tasks,
     )
     html    = transform(rendered)
-    subject = f"Daily digest — {NOW.strftime('%a %b %-d')}"
+    subject = f"Daily digest — {NOW.strftime('%a %b %-d, %-I:%M %p')}"
     log(f"Sending digest → {OWNER_EMAIL}")
     _resend(subject, html)
 
@@ -318,10 +305,7 @@ def send_unknown_reply(attempts: list):
         "<code style='background:#ece7df;padding:2px 7px;border-radius:4px;'>"
         "add: buy milk</code> &nbsp;add a task<br>"
         "<code style='background:#ece7df;padding:2px 7px;border-radius:4px;'>"
-        "done: buy milk</code> &nbsp;remove a task<br>"
-        "<code style='background:#ece7df;padding:2px 7px;border-radius:4px;'>"
-        "clear</code> &nbsp;empty the list<br>"
-        "Or send a bullet list to replace everything."
+        "done: buy milk</code> &nbsp;remove a task"
         "</div></div></body></html>"
     )
     log(f"Sending unknown-command reply → {OWNER_EMAIL}")
@@ -362,12 +346,8 @@ def main():
     if unknown_attempts:
         send_unknown_reply(unknown_attempts)
 
-    if NOW.hour == 6:
-        log("6 AM — sending morning digest")
-        events = fetch_events()
-        send_digest(events, tasks)
-    else:
-        log(f"Hour {NOW.hour} — skipping digest (not 6 AM)")
+    events = fetch_events()
+    send_digest(events, tasks)
 
     log("=== Done ===")
 
