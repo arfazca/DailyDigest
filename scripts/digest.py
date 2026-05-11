@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import recurring_ical_events
 import requests
 from email_reply_parser import EmailReplyParser
 from icalendar import Calendar
@@ -18,26 +19,31 @@ from premailer import transform
 
 
 # ---------- Config ----------
-GMAIL_USER = os.environ["GMAIL_USER"]
+GMAIL_USER         = os.environ["GMAIL_USER"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
-OWNER_EMAIL = os.environ["OWNER_EMAIL"]
-FROM_EMAIL = os.environ["FROM_EMAIL"]           # e.g. morning@arfaz.ca
-RESEND_API_KEY = os.environ["RESEND_API_KEY"]
-ICS_URL = os.environ["ICS_URL"]
-TIMEZONE = os.environ.get("TIMEZONE", "America/Vancouver")
+OWNER_EMAIL        = os.environ["OWNER_EMAIL"]
+FROM_EMAIL         = os.environ["FROM_EMAIL"]
+RESEND_API_KEY     = os.environ["RESEND_API_KEY"]
+ICS_URL            = os.environ["ICS_URL"]
+TIMEZONE           = os.environ.get("TIMEZONE", "America/Vancouver")
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-TASKS_FILE = REPO_ROOT / "tasks.md"
+REPO_ROOT     = Path(__file__).resolve().parent.parent
+TASKS_FILE    = REPO_ROOT / "tasks.md"
 TEMPLATE_FILE = REPO_ROOT / "templates" / "email.html"
 
-TZ = ZoneInfo(TIMEZONE)
-NOW = datetime.now(TZ)
+TZ    = ZoneInfo(TIMEZONE)
+NOW   = datetime.now(TZ)
 TODAY = NOW.date()
+
+def log(msg):
+    """Timestamped print for GitHub Actions logs."""
+    print(f"[{datetime.now(TZ).strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
 # ---------- Tasks file ----------
 def read_tasks():
     if not TASKS_FILE.exists():
+        log("tasks.md not found — starting with empty list")
         return []
     tasks = []
     for line in TASKS_FILE.read_text().splitlines():
@@ -46,34 +52,44 @@ def read_tasks():
             continue
         m = re.match(r"^[-*+]\s+(.*)$", line)
         tasks.append(m.group(1).strip() if m else line)
+    log(f"Read {len(tasks)} task(s) from tasks.md: {tasks}")
     return tasks
 
 
 def write_tasks(tasks):
     body = "# Tasks\n\n" + ("\n".join(f"- {t}" for t in tasks) + "\n" if tasks else "")
     TASKS_FILE.write_text(body)
+    log(f"Wrote {len(tasks)} task(s) to tasks.md")
 
 
 # ---------- Command parsing ----------
 def parse_command(body: str):
-    """Return (action, payload). Actions: add, remove, clear, replace, none."""
+    """Return (action, payload). Actions: add, remove, clear, replace, unknown, none."""
     clean = EmailReplyParser.parse_reply(body).strip()
+    log(f"  Cleaned reply body: {clean[:120]!r}")
     if not clean:
         return ("none", None)
+
     lines = [l.strip() for l in clean.splitlines() if l.strip()]
+
+    # Replace mode: 2+ lines that are all bullets
     bullets = [re.match(r"^[-*+]\s+(.*)$", l) for l in lines]
     if len(lines) >= 2 and all(bullets):
         return ("replace", [b.group(1).strip() for b in bullets])
+
     first = lines[0]
     if first.lower() == "clear":
         return ("clear", None)
+
     m = re.match(r"^(add|remove|done|del|delete)\s*:\s*(.+)$", first, re.IGNORECASE)
     if m:
         action = m.group(1).lower()
         if action in ("done", "del", "delete"):
             action = "remove"
         return (action, m.group(2).strip())
-    return ("none", None)
+
+    # Something was written but we couldn't parse it
+    return ("unknown", clean[:200])
 
 
 def get_text_body(msg) -> str:
@@ -98,23 +114,40 @@ def get_text_body(msg) -> str:
 # ---------- IMAP polling ----------
 def process_inbox():
     """Apply pending reply-commands. Returns (final_tasks, change_summaries)."""
-    print(f"-> IMAP login as {GMAIL_USER}")
+    log(f"Connecting to IMAP as {GMAIL_USER}")
     M = imaplib.IMAP4_SSL("imap.gmail.com")
     M.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-    M.select("INBOX")
-    typ, data = M.search(None, f'(UNSEEN FROM "{OWNER_EMAIL}" SUBJECT "Daily digest")')
+
+    # Search All Mail so self-addressed replies aren't missed
+    M.select('"[Gmail]/All Mail"', readonly=False)
+    since = (NOW - timedelta(hours=36)).strftime("%d-%b-%Y")
+    search = f'(SINCE "{since}" FROM "{OWNER_EMAIL}" SUBJECT "Daily digest")'
+    log(f"IMAP search: {search}")
+
+    typ, data = M.search(None, search)
     msg_ids = data[0].split()
-    print(f"  {len(msg_ids)} unread message(s) from {OWNER_EMAIL}")
+    log(f"Found {len(msg_ids)} message(s) matching search")
 
     tasks = read_tasks()
     summaries = []
+    unknown_attempts = []
 
     for msg_id in msg_ids:
-        typ, msg_data = M.fetch(msg_id, "(RFC822)")
+        typ, msg_data = M.fetch(msg_id, "(RFC822 FLAGS)")
+        flags = imaplib.ParseFlags(msg_data[0][0])
+        log(f"  Message {msg_id.decode()} flags: {flags}")
+
+        # Skip already-seen (processed in a previous run)
+        if b"\\Seen" in flags:
+            log(f"  Skipping — already processed (Seen)")
+            continue
+
         msg = email.message_from_bytes(msg_data[0][1])
+        subject = msg.get("Subject", "")
+        log(f"  Subject: {subject!r}")
         body = get_text_body(msg)
         action, payload = parse_command(body)
-        print(f"  msg {msg_id.decode()}: action={action}, payload={payload!r}")
+        log(f"  Parsed → action={action!r}, payload={payload!r}")
 
         if action == "add":
             tasks.append(payload)
@@ -125,6 +158,9 @@ def process_inbox():
             tasks = [t for t in tasks if target not in t.lower()]
             if len(tasks) < before:
                 summaries.append(f"Removed: {payload}")
+            else:
+                log(f"  No task matched '{payload}' — nothing removed")
+                unknown_attempts.append(f"Tried to remove \"{payload}\" but nothing matched")
         elif action == "clear":
             if tasks:
                 summaries.append("Cleared all tasks")
@@ -133,48 +169,65 @@ def process_inbox():
             count = len(payload)
             summaries.append(f"Replaced list ({count} item{'s' if count != 1 else ''})")
             tasks = payload
+        elif action == "unknown":
+            log(f"  Unrecognised command: {payload!r}")
+            unknown_attempts.append(payload)
 
+        # Mark as seen so it's not picked up again tomorrow
         M.store(msg_id, "+FLAGS", "\\Seen")
 
     M.close()
     M.logout()
+
     if summaries:
         write_tasks(tasks)
-        print(f"  changes: {summaries}")
-    return tasks, summaries
+        log(f"Changes applied: {summaries}")
+
+    return tasks, summaries, unknown_attempts
 
 
 # ---------- Calendar ----------
-def _expand_to_local(start):
-    if hasattr(start, "tzinfo"):
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=TZ)
-        return start.astimezone(TZ), False
-    return datetime.combine(start, datetime.min.time(), tzinfo=TZ), True
-
-
 def fetch_events():
-    print("-> Fetching ICS feed")
-    r = requests.get(ICS_URL, timeout=30)
-    r.raise_for_status()
+    log(f"Fetching ICS feed from URL (length={len(ICS_URL)})")
+    try:
+        r = requests.get(ICS_URL, timeout=30)
+        log(f"ICS response: HTTP {r.status_code}, {len(r.content)} bytes")
+        r.raise_for_status()
+    except Exception as e:
+        log(f"ERROR fetching ICS: {e}")
+        return []
+
     cal = Calendar.from_ical(r.content)
+
     today_start = datetime.combine(TODAY, datetime.min.time(), tzinfo=TZ)
-    today_end = today_start + timedelta(days=1)
+    today_end   = today_start + timedelta(days=1)
+    log(f"Fetching events between {today_start} and {today_end}")
+
+    # recurring_ical_events expands RRULE/recurring events correctly
+    raw_events = recurring_ical_events.of(cal).between(today_start, today_end)
+    log(f"Found {len(raw_events)} event(s) today (including recurring)")
+
     events = []
-    for component in cal.walk():
-        if component.name != "VEVENT":
-            continue
+    for component in raw_events:
         dtstart = component.get("dtstart")
         if not dtstart:
             continue
-        start_local, is_all_day = _expand_to_local(dtstart.dt)
-        if not (today_start <= start_local < today_end):
-            continue
-        title = str(component.get("summary", "(no title)"))
+        start = dtstart.dt
+        if hasattr(start, "tzinfo"):
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=TZ)
+            start_local = start.astimezone(TZ)
+            is_all_day = False
+        else:
+            start_local = datetime.combine(start, datetime.min.time(), tzinfo=TZ)
+            is_all_day = True
+
+        title    = str(component.get("summary", "(no title)"))
         time_str = "All day" if is_all_day else start_local.strftime("%-I:%M %p").lower()
+        log(f"  Event: {time_str!r} — {title!r}")
         events.append({"time": time_str, "title": title, "_sort": start_local})
+
     events.sort(key=lambda e: (e["time"] == "All day", e["_sort"]))
-    print(f"  {len(events)} event(s) today")
     return events
 
 
@@ -193,7 +246,7 @@ def _resend(subject: str, html: str):
         timeout=30,
     )
     r.raise_for_status()
-    print(f"  sent (id: {r.json().get('id')})")
+    log(f"Email sent (id: {r.json().get('id')})")
 
 
 # ---------- Morning digest ----------
@@ -207,70 +260,98 @@ def send_digest(events, tasks):
     )
     html = transform(rendered)
     subject = f"Daily digest — {NOW.strftime('%a %b %-d')}"
-    print(f"-> Sending digest: {FROM_EMAIL} -> {OWNER_EMAIL}")
+    log(f"Sending morning digest → {OWNER_EMAIL}")
     _resend(subject, html)
 
 
 # ---------- Instant confirmation ----------
 def send_confirmation(summaries: list, tasks: list):
-    """Sent immediately when the morning run detects reply-commands."""
     change_rows = "".join(
         '<div style="padding:9px 0;font-size:15px;color:#2a2a2a;border-bottom:1px solid #f3efe7;">'
         + s + "</div>"
         for s in summaries
     )
-    if tasks:
-        task_rows = "".join(
+    task_rows = (
+        "".join(
             '<div style="padding:9px 0;font-size:15px;color:#2a2a2a;border-bottom:1px solid #f3efe7;">'
             '<span style="color:#b85c2b;font-weight:700;margin-right:10px;">&#9675;</span>'
             + t + "</div>"
             for t in tasks
         )
-    else:
-        task_rows = (
-            '<p style="color:#b5b0a5;font-style:italic;font-size:14px;margin:0;">'
-            "Your list is empty.</p>"
-        )
-
+        if tasks else
+        '<p style="color:#b5b0a5;font-style:italic;font-size:14px;margin:0;">Your list is empty.</p>'
+    )
     html = (
-        "<!DOCTYPE html><html><head>"
-        '<meta charset="UTF-8"/>'
-        '<meta name="viewport" content="width=device-width,initial-scale=1.0"/>'
-        "</head>"
-        '<body style="margin:0;padding:24px 12px;background:#f5f1ea;'
-        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;\">"
-        '<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;'
-        'overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);">'
-
-        '<div style="background:#2d6a4f;padding:22px 32px;">'
-        '<p style="margin:0;font-size:12px;color:#95d5b2;text-transform:uppercase;'
-        'letter-spacing:1.8px;font-weight:700;">Tasks updated</p>'
-        '<p style="margin:6px 0 0;font-size:22px;font-weight:700;color:#fff;">Got it &#10003;</p>'
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'/></head>"
+        "<body style='margin:0;padding:24px 12px;background:#f5f1ea;"
+        "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;'>"
+        "<div style='max-width:560px;margin:0 auto;background:#fff;border-radius:12px;"
+        "overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);'>"
+        "<div style='background:#2d6a4f;padding:22px 32px;'>"
+        "<p style='margin:0;font-size:12px;color:#95d5b2;text-transform:uppercase;"
+        "letter-spacing:1.8px;font-weight:700;'>Tasks updated</p>"
+        "<p style='margin:6px 0 0;font-size:22px;font-weight:700;color:#fff;'>Got it &#10003;</p>"
         "</div>"
-
-        '<div style="padding:22px 32px;border-bottom:1px solid #ece7df;">'
-        '<p style="font-size:11px;color:#8a8579;text-transform:uppercase;letter-spacing:1.8px;'
-        'font-weight:700;margin:0 0 12px;">What changed</p>'
+        "<div style='padding:22px 32px;border-bottom:1px solid #ece7df;'>"
+        "<p style='font-size:11px;color:#8a8579;text-transform:uppercase;letter-spacing:1.8px;"
+        "font-weight:700;margin:0 0 12px;'>What changed</p>"
         + change_rows +
         "</div>"
-
-        '<div style="padding:22px 32px;">'
-        '<p style="font-size:11px;color:#8a8579;text-transform:uppercase;letter-spacing:1.8px;'
-        'font-weight:700;margin:0 0 12px;">Your list now</p>'
+        "<div style='padding:22px 32px;'>"
+        "<p style='font-size:11px;color:#8a8579;text-transform:uppercase;letter-spacing:1.8px;"
+        "font-weight:700;margin:0 0 12px;'>Your list now</p>"
         + task_rows +
         "</div>"
-
-        '<div style="padding:16px 32px 20px;background:#faf8f3;font-size:12px;'
-        'color:#8a8579;line-height:1.6;">'
+        "<div style='padding:16px 32px 20px;background:#faf8f3;font-size:12px;"
+        "color:#8a8579;line-height:1.6;'>"
         "You'll get the full digest with your calendar tomorrow morning."
-        "</div>"
-
-        "</div></body></html>"
+        "</div></div></body></html>"
     )
-
     n = len(summaries)
     subject = f"Tasks updated \u2014 {n} change{'s' if n != 1 else ''}"
-    print(f"-> Sending confirmation to {OWNER_EMAIL}")
+    log(f"Sending confirmation → {OWNER_EMAIL}")
+    _resend(subject, html)
+
+
+# ---------- Unknown command reply ----------
+def send_unknown_reply(attempts: list):
+    attempts_html = "".join(
+        f'<div style="padding:8px 12px;background:#f5f1ea;border-radius:6px;'
+        f'font-family:monospace;font-size:13px;color:#5a5550;margin-bottom:8px;">{a}</div>'
+        for a in attempts
+    )
+    html = (
+        "<!DOCTYPE html><html><head><meta charset='UTF-8'/></head>"
+        "<body style='margin:0;padding:24px 12px;background:#f5f1ea;"
+        "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;'>"
+        "<div style='max-width:560px;margin:0 auto;background:#fff;border-radius:12px;"
+        "overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);'>"
+        "<div style='background:#7c4d2a;padding:22px 32px;'>"
+        "<p style='margin:0;font-size:12px;color:#f5c9a0;text-transform:uppercase;"
+        "letter-spacing:1.8px;font-weight:700;'>Heads up</p>"
+        "<p style='margin:6px 0 0;font-size:22px;font-weight:700;color:#fff;'>"
+        "Didn't understand that</p>"
+        "</div>"
+        "<div style='padding:22px 32px;border-bottom:1px solid #ece7df;'>"
+        "<p style='font-size:15px;color:#2a2a2a;margin:0 0 14px;'>"
+        "I received your reply but couldn't parse the command:</p>"
+        + attempts_html +
+        "</div>"
+        "<div style='padding:22px 32px;background:#faf8f3;font-size:13px;color:#5a5550;line-height:1.8;'>"
+        "<strong style='color:#2a2a2a;'>Valid commands:</strong><br>"
+        "<code style='background:#ece7df;padding:2px 7px;border-radius:4px;'>add: buy milk</code>"
+        " &nbsp;add a task<br>"
+        "<code style='background:#ece7df;padding:2px 7px;border-radius:4px;'>done: buy milk</code>"
+        " &nbsp;remove a task<br>"
+        "<code style='background:#ece7df;padding:2px 7px;border-radius:4px;'>clear</code>"
+        " &nbsp;empty the list<br>"
+        "Or send a bullet list to replace everything:<br>"
+        "<code style='background:#ece7df;padding:2px 7px;border-radius:4px;'>- task one<br>"
+        "- task two</code>"
+        "</div></div></body></html>"
+    )
+    subject = "Didn't understand your task command"
+    log(f"Sending unknown-command reply → {OWNER_EMAIL}")
     _resend(subject, html)
 
 
@@ -280,6 +361,7 @@ def git_commit_if_changed():
         ["git", "status", "--porcelain", "tasks.md"], capture_output=True, text=True
     )
     if not result.stdout.strip():
+        log("tasks.md unchanged — no commit needed")
         return
     subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
     subprocess.run(
@@ -292,20 +374,26 @@ def git_commit_if_changed():
         check=True,
     )
     subprocess.run(["git", "push"], check=True)
-    print("-> Committed tasks.md")
+    log("Committed and pushed tasks.md")
 
 
 def main():
-    tasks, summaries = process_inbox()
+    log("=== Daily Digest starting ===")
+    log(f"Local time: {NOW.strftime('%Y-%m-%d %H:%M %Z')}")
 
-    # If there were changes: fire confirmation immediately + commit
+    tasks, summaries, unknown_attempts = process_inbox()
+
     if summaries:
         send_confirmation(summaries, tasks)
         git_commit_if_changed()
 
-    # Always send the morning digest
+    if unknown_attempts:
+        send_unknown_reply(unknown_attempts)
+
     events = fetch_events()
     send_digest(events, tasks)
+
+    log("=== Done ===")
 
 
 if __name__ == "__main__":

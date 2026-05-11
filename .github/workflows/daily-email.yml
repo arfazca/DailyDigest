@@ -2,8 +2,8 @@ name: Daily Digest
 
 on:
   schedule:
-    # 13:00 UTC = 6:00 AM Pacific Time (BC permanent daylight saving)
-    # No time changes — this stays constant year-round
+    # 13:00 UTC = 6:00 AM Pacific Time
+    # BC adopted permanent daylight saving (UTC-7) from March 8 2026 — no adjustments needed
     - cron: '0 13 * * *'
   workflow_dispatch:  # manual trigger from the Actions tab
 
@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # needed to push tasks.md updates
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # suppress Node 20 deprecation warning
     steps:
       - uses: actions/checkout@v4
 
