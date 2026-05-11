@@ -20,7 +20,7 @@ GMAIL_USER         = os.environ["GMAIL_USER"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 OWNER_EMAIL        = os.environ["OWNER_EMAIL"]
 FROM_EMAIL         = os.environ["FROM_EMAIL"]
-SENDER_EMAIL       = os.environ["SENDER_EMAIL"]
+FORWARD_EMAILS     = [e.strip() for e in os.environ.get("FORWARD_EMAILS", "").split(",") if e.strip()]
 RESEND_API_KEY     = os.environ["RESEND_API_KEY"]
 ICS_URL            = os.environ["ICS_URL"]
 TIMEZONE           = os.environ.get("TIMEZONE", "America/Vancouver")
@@ -112,14 +112,13 @@ def process_inbox():
     log(f"Connecting to IMAP as {GMAIL_USER}")
     M = imaplib.IMAP4_SSL("imap.gmail.com")
     M.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-    status, _ = M.select("INBOX", readonly=False)
-    log(f"INBOX select: {status}")
+    status, _ = M.select('"[Gmail]/All Mail"', readonly=False)
+    log(f"All Mail select: {status}")
 
-    since  = (NOW - timedelta(hours=36)).strftime("%d-%b-%Y")
-    search = f'(SINCE "{since}" FROM "{SENDER_EMAIL}" SUBJECT "Re: Daily digest")'
-    log(f"IMAP search: {search}")
+    search_query = f'"deliveredto:{FROM_EMAIL} newer_than:2d"'
+    log(f"IMAP search: X-GM-RAW {search_query}")
 
-    typ, data = M.search(None, search)
+    typ, data = M.search(None, "X-GM-RAW", search_query)
     msg_ids = data[0].split()
     log(f"Found {len(msg_ids)} reply(ies)")
 
