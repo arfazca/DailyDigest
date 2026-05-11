@@ -20,7 +20,7 @@ GMAIL_USER         = os.environ["GMAIL_USER"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 OWNER_EMAIL        = os.environ["OWNER_EMAIL"]
 FROM_EMAIL         = os.environ["FROM_EMAIL"]
-SENDER_EMAIL       = os.environ["SENDER_EMAIL"]
+FORWARD_EMAILS     = [e.strip() for e in os.environ.get("FORWARD_EMAILS", "").split(",") if e.strip()]
 RESEND_API_KEY     = os.environ["RESEND_API_KEY"]
 ICS_URL            = os.environ["ICS_URL"]
 TIMEZONE           = os.environ.get("TIMEZONE", "America/Vancouver")
@@ -40,7 +40,7 @@ def log(msg):
 
 def read_tasks():
     if not TASKS_FILE.exists():
-        log("tasks.md not found — starting empty")
+        log("tasks.md not found - starting empty")
         return []
     tasks = []
     for line in TASKS_FILE.read_text().splitlines():
@@ -112,21 +112,19 @@ def process_inbox():
     log(f"Connecting to IMAP as {GMAIL_USER}")
     M = imaplib.IMAP4_SSL("imap.gmail.com")
     M.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-    status, _ = M.select("INBOX", readonly=False)
-    log(f"INBOX select: {status}")
+    status, _ = M.select('"[Gmail]/All Mail"', readonly=False)
+    log(f"All Mail select: {status}")
 
-    since  = (NOW - timedelta(hours=36)).strftime("%d-%b-%Y")
-    search = f'(SINCE "{since}" FROM "{SENDER_EMAIL}" SUBJECT "Re: Daily digest")'
-    log(f"IMAP search: {search}")
-
-    typ, data = M.search(None, search)
+    search_query = f'"deliveredto:{FROM_EMAIL} newer_than:2d"'
+    log(f"IMAP search: X-GM-RAW {search_query}")
+    typ, data = M.search(None, "X-GM-RAW", search_query)
     msg_ids = data[0].split()
-    log(f"Found {len(msg_ids)} reply(ies)")
+    log(f"Found {len(msg_ids)} message(s) delivered to {FROM_EMAIL}")
 
-    tasks      = read_tasks()
-    successes  = []
-    not_found  = []
-    unknowns   = []
+    tasks        = read_tasks()
+    successes    = []
+    not_found    = []
+    unknowns     = []
 
     for msg_id in msg_ids:
         typ, msg_data = M.fetch(msg_id, "(RFC822 FLAGS)")
@@ -134,20 +132,24 @@ def process_inbox():
         log(f"  Message {msg_id.decode()} flags: {flags}")
 
         if b"\\Seen" in flags:
-            log("  Skipping — already processed")
+            log("  Skipping - already processed")
             continue
 
         msg      = email.message_from_bytes(msg_data[0][1])
         subject  = msg.get("Subject", "")
-        log(f"  Subject: {subject!r}")
+        sender   = msg.get("From", "")
+        log(f"  From: {sender!r} Subject: {subject!r}")
         body     = get_text_body(msg)
         commands = parse_commands(body)
         log(f"  Commands: {commands}")
 
         for action, payload in commands:
             if action == "add":
-                tasks.append(payload)
-                successes.append(f"Added: {payload}")
+                if payload.lower() in [t.lower() for t in tasks]:
+                    log(f"  Duplicate ignored: '{payload}'")
+                else:
+                    tasks.append(payload)
+                    successes.append(f"Added: {payload}")
             elif action == "remove":
                 target = payload.lower()
                 before = len(tasks)
@@ -217,7 +219,7 @@ def fetch_events():
 
         title    = str(component.get("summary", "(no title)"))
         time_str = "All day" if is_all_day else start_local.strftime("%-I:%M %p").lower()
-        log(f"  {time_str} — {title}")
+        log(f"  {time_str} - {title}")
         events.append({"time": time_str, "title": title, "_sort": start_local})
 
     events.sort(key=lambda e: (e["time"] == "All day", e["_sort"]))
@@ -226,16 +228,19 @@ def fetch_events():
 
 
 def _resend(subject: str, html: str):
+    payload = {
+        "from": FROM_EMAIL,
+        "to": [OWNER_EMAIL],
+        "reply_to": FROM_EMAIL,
+        "subject": subject,
+        "html": html,
+    }
+    if FORWARD_EMAILS:
+        payload["bcc"] = FORWARD_EMAILS
     r = requests.post(
         "https://api.resend.com/emails",
         headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-        json={
-            "from": FROM_EMAIL,
-            "to": [OWNER_EMAIL],
-            "reply_to": OWNER_EMAIL,
-            "subject": subject,
-            "html": html,
-        },
+        json=payload,
         timeout=30,
     )
     r.raise_for_status()
@@ -251,29 +256,29 @@ def send_digest(events, tasks):
         tasks=tasks,
     )
     html    = transform(rendered)
-    subject = f"Daily digest — {NOW.strftime('%a %b %-d')}"
-    log(f"Sending digest → {OWNER_EMAIL}")
+    subject = f"Daily digest - {NOW.strftime('%a %b %-d')}"
+    log(f"Sending digest to {OWNER_EMAIL}")
     _resend(subject, html)
 
 
-def _row(text, color="#2a2a2a"):
+def _row(text):
     return (
-        f'<div style="padding:9px 0;font-size:15px;color:{color};'
+        f'<div style="padding:9px 0;font-size:15px;color:#2a2a2a;'
         f'border-bottom:1px solid #f3efe7;">{text}</div>'
     )
 
 
 def send_reply_summary(successes, not_found, unknowns, tasks):
-    success_html = "".join(_row(s) for s in successes) if successes else ""
+    success_html   = "".join(_row(s) for s in successes)
     not_found_html = "".join(
-        _row(f'&#10007; &nbsp;<span style="color:#888;">{t}</span> — not in list', "#2a2a2a")
+        _row(f'&#10007; &nbsp;<span style="color:#888;">{t}</span> - not in list')
         for t in not_found
-    ) if not_found else ""
+    )
     unknown_html = "".join(
         f'<div style="padding:8px 12px;background:#f5f1ea;border-radius:6px;'
         f'font-family:monospace;font-size:13px;color:#5a5550;margin-bottom:8px;">{u}</div>'
         for u in unknowns
-    ) if unknowns else ""
+    )
 
     task_rows = (
         "".join(
@@ -301,9 +306,9 @@ def send_reply_summary(successes, not_found, unknowns, tasks):
         unknown_section = (
             "<div style='padding:22px 32px;border-bottom:1px solid #ece7df;background:#fffaf7;'>"
             "<p style='font-size:11px;color:#8a8579;text-transform:uppercase;letter-spacing:1.8px;"
-            "font-weight:700;margin:0 0 12px;'>Couldn't parse</p>"
+            "font-weight:700;margin:0 0 12px;'>Could not parse</p>"
             "<p style='font-size:14px;color:#5a5550;margin:0 0 12px;'>"
-            "These lines weren't recognised as commands:</p>"
+            "These lines were not recognised as commands:</p>"
             + unknown_html +
             "<p style='font-size:12px;color:#8a8579;margin:12px 0 0;'>"
             "Valid: <code style='background:#ece7df;padding:2px 6px;border-radius:4px;'>add: X</code> &nbsp;"
@@ -332,13 +337,13 @@ def send_reply_summary(successes, not_found, unknowns, tasks):
         "</div>"
         "<div style='padding:16px 32px 20px;background:#faf8f3;font-size:12px;"
         "color:#8a8579;line-height:1.6;'>"
-        "You'll get the full digest with your calendar tomorrow morning."
+        "You will get the full digest with your calendar at 6 AM, 12 PM, and 6 PM."
         "</div></div></body></html>"
     )
 
     n       = len(successes)
-    subject = f"Tasks updated \u2014 {n} change{'s' if n != 1 else ''}" if successes else "Task reply received"
-    log(f"Sending reply summary → {OWNER_EMAIL}")
+    subject = f"Tasks updated - {n} change{'s' if n != 1 else ''}" if successes else "Task reply received"
+    log(f"Sending reply summary to {OWNER_EMAIL}")
     _resend(subject, html)
 
 
@@ -375,12 +380,12 @@ def main():
     if successes:
         git_commit_if_changed()
 
-    if NOW.hour == 6:
-        log("6 AM — sending morning digest")
+    scheduled = NOW.hour in (6, 12, 18)
+    if successes or scheduled:
         events = fetch_events()
         send_digest(events, tasks)
     else:
-        log(f"Hour {NOW.hour} — skipping digest (not 6 AM)")
+        log(f"Hour {NOW.hour} - skipping digest")
 
     log("=== Done ===")
 
