@@ -2,9 +2,8 @@ name: Daily Digest
 
 on:
   schedule:
-    # 13:00 UTC = 6:00 AM PDT (Mar–Nov) / 5:00 AM PST (Nov–Mar)
-    # Change to '0 14 * * *' if you want 6 AM during PST winter months.
-    # Heads up: GitHub Actions cron can run 5–15 min late.
+    # 13:00 UTC = 6:00 AM Pacific Time (BC permanent daylight saving)
+    # No time changes — this stays constant year-round
     - cron: '0 13 * * *'
   workflow_dispatch:  # manual trigger from the Actions tab
 
