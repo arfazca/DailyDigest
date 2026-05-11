@@ -1,0 +1,36 @@
+name: Daily Digest
+
+on:
+  schedule:
+    # 13:00 UTC = 6:00 AM PDT (Mar–Nov) / 5:00 AM PST (Nov–Mar)
+    # Change to '0 14 * * *' if you want 6 AM during PST winter months.
+    # Heads up: GitHub Actions cron can run 5–15 min late.
+    - cron: '0 13 * * *'
+  workflow_dispatch:  # manual trigger from the Actions tab
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # needed to push tasks.md updates
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run digest
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ICS_URL: ${{ secrets.ICS_URL }}
+          TIMEZONE: America/Vancouver
+        run: python scripts/digest.py
