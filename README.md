@@ -1,6 +1,6 @@
 # Daily Digest
 
-A fully automated daily email digest — your Outlook calendar events and a to-do list, delivered at 6 AM every morning. Reply (or email) to edit your tasks from any device, any email address.
+A fully automated daily email digest - your Outlook calendar events and a to-do list, delivered at 6 AM every morning. Reply (or email) to edit your tasks from any device, any email address.
 
 ## How it works
 
@@ -39,11 +39,11 @@ Settings → Secrets and variables → Actions → New repository secret:
 |---|---|
 | `GMAIL_USER` | Your Gmail address e.g. `you@gmail.com` |
 | `GMAIL_APP_PASSWORD` | The 16-char app password (no spaces) |
-| `OWNER_EMAIL` | Same Gmail — where the digest is delivered |
+| `OWNER_EMAIL` | Same Gmail - where the digest is delivered |
 | `FROM_EMAIL` | `morning@arfaz.ca` |
 | `RESEND_API_KEY` | Your Resend API key |
 | `ICS_URL` | The Outlook `.ics` URL |
-| `FORWARD_EMAILS` | Comma-separated list of extra addresses to BCC e.g. `you@outlook.com,other@gmail.com` — leave empty to skip |
+| `FORWARD_EMAILS` | Comma-separated list of extra addresses to BCC e.g. `you@outlook.com,other@gmail.com` - leave empty to skip |
 
 ### 6. Gmail filter (keeps inbox clean)
 1. Gmail → Settings → See all settings → Filters and Blocked Addresses → Create new filter
@@ -57,7 +57,7 @@ Emails sent to `morning@arfaz.ca` land in All Mail (not your inbox). The script 
 GitHub's built-in cron is unreliable (runs 1–3 hours late). cron-job.org fires exactly on the hour.
 
 1. Sign up at cron-job.org
-2. Create a new cron job — **Common tab:**
+2. Create a new cron job - **Common tab:**
    - URL: `https://api.github.com/repos/YOUR_USERNAME/DailyDigest/actions/workflows/daily-email.yml/dispatches`
    - Schedule: every hour at `:00`
 3. **Advanced tab:**
@@ -77,7 +77,7 @@ GitHub's built-in cron is unreliable (runs 1–3 hours late). cron-job.org fires
 - Permissions → Actions: **Read and write**
 - Generate and copy the token
 
-Hit **Test run** — you should see `204 No Content`. Check your GitHub Actions tab for a new run.
+Hit **Test run** - you should see `204 No Content`. Check your GitHub Actions tab for a new run.
 
 ## Editing tasks
 
@@ -91,14 +91,14 @@ done: buy milk
 clear
 ```
 
-**Replace your whole list** — send a bullet list:
+**Replace your whole list** - send a bullet list:
 ```
 - call dentist
 - submit report
 - pick up dry cleaning
 ```
 
-**Accepted from any sender** — ping@arfaz.ca, your Outlook, your other Gmail, anything. As long as it's addressed to `morning@arfaz.ca` it gets processed.
+**Accepted from any sender** - ping@arfaz.ca, your Outlook, your other Gmail, anything. As long as it's addressed to `morning@arfaz.ca` it gets processed.
 
 If a command isn't understood, you'll get a reply explaining the valid formats.
 
@@ -106,7 +106,7 @@ If a command isn't understood, you'll get a reply explaining the valid formats.
 
 **6 AM every morning:** a styled digest with today's upcoming calendar events (past events filtered out) and your full task list.
 
-**Any time you edit tasks:** an immediate confirmation showing what was added, removed, or not found — plus your updated list.
+**Any time you edit tasks:** an immediate confirmation showing what was added, removed, or not found - plus your updated list.
 
 **Digest also BCC'd** to any addresses in `FORWARD_EMAILS` so you can read it across all your inboxes.
 
@@ -144,12 +144,12 @@ Edit `templates/email.html`. Variables available in the template:
 
 ## Troubleshooting
 
-**No digest at 6 AM** — check the Actions tab. Common causes: wrong Gmail app password, ICS URL expired, Resend API key wrong.
+**No digest at 6 AM** - check the Actions tab. Common causes: wrong Gmail app password, ICS URL expired, Resend API key wrong.
 
-**Task reply not picked up** — make sure the email was sent TO `morning@arfaz.ca`. Check the Actions run log for the IMAP search results.
+**Task reply not picked up** - make sure the email was sent TO `morning@arfaz.ca`. Check the Actions run log for the IMAP search results.
 
-**Cron job returning 404** — the GitHub PAT token expired or lost permissions. Regenerate it.
+**Cron job returning 404** - the GitHub PAT token expired or lost permissions. Regenerate it.
 
-**Cron job returning 401** — the `Authorization` header value must start with `Bearer ` (with a space) before the token.
+**Cron job returning 401** - the `Authorization` header value must start with `Bearer ` (with a space) before the token.
 
-**Calendar showing old events** — Outlook's published ICS feed refreshes every few hours. Events added recently may not appear until the next feed refresh.
+**Calendar showing old events** - Outlook's published ICS feed refreshes every few hours. Events added recently may not appear until the next feed refresh.
