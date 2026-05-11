@@ -232,9 +232,10 @@ def _resend(subject: str, html: str):
         json={
             "from": FROM_EMAIL,
             "to": [OWNER_EMAIL],
-            "reply_to": OWNER_EMAIL,
+            "reply_to": FROM_EMAIL,
             "subject": subject,
             "html": html,
+            **( {"bcc": FORWARD_EMAILS} if FORWARD_EMAILS else {} ),
         },
         timeout=30,
     )
