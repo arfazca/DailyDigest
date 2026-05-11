@@ -29,6 +29,7 @@ jobs:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
           FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ICS_URL: ${{ secrets.ICS_URL }}
           TIMEZONE: America/Vancouver

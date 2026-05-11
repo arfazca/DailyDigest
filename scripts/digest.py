@@ -20,6 +20,7 @@ GMAIL_USER         = os.environ["GMAIL_USER"]
 GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 OWNER_EMAIL        = os.environ["OWNER_EMAIL"]
 FROM_EMAIL         = os.environ["FROM_EMAIL"]
+SENDER_EMAIL       = os.environ["SENDER_EMAIL"]
 RESEND_API_KEY     = os.environ["RESEND_API_KEY"]
 ICS_URL            = os.environ["ICS_URL"]
 TIMEZONE           = os.environ.get("TIMEZONE", "America/Vancouver")
@@ -101,7 +102,7 @@ def process_inbox():
     log(f"INBOX select: {status}")
 
     since  = (NOW - timedelta(hours=36)).strftime("%d-%b-%Y")
-    search = f'(SINCE "{since}" TO "{FROM_EMAIL}")'
+    search = f'(SINCE "{since}" FROM "{SENDER_EMAIL}")'
     log(f"IMAP search: {search}")
 
     typ, data = M.search(None, search)
@@ -204,7 +205,7 @@ def _resend(subject: str, html: str):
         json={
             "from": FROM_EMAIL,
             "to": [OWNER_EMAIL],
-            "reply_to": FROM_EMAIL,
+            "reply_to": OWNER_EMAIL,
             "subject": subject,
             "html": html,
         },
