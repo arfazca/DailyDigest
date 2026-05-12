@@ -364,6 +364,4 @@ Common changes and where to make them:
 
 ## License
 
-MIT with attribution. See [LICENSE](LICENSE).
-
-You can use this code in personal or commercial projects, modify it, and redistribute it.
+Apache License with attribution. See [LICENSE](LICENSE). You can use this code in personal or commercial projects, modify it, and redistribute it.
