@@ -1,155 +1,369 @@
-# Daily Digest
+# DailyDigest
 
-A fully automated daily email digest - your Outlook calendar events and a to-do list, delivered at 6 AM every morning. Reply (or email) to edit your tasks from any device, any email address.
+A self-hosted daily email assistant. Every morning, afternoon, and evening it sends a digest of the day's calendar events and an editable task list. Tasks are managed entirely over email: send a command, get a reply, the change persists.
 
-## How it works
+The entire system runs on free services and Git: a Python script in GitHub Actions, an HTTP scheduler, a transactional email API, and IMAP.
 
-**Sending:** cron-job.org fires an HTTP request to the GitHub API every hour on the dot. GitHub Actions runs the workflow.
+## Contents
 
-**At 6 AM:** the script fetches your Outlook calendar and tasks, renders a styled HTML email, and sends it via Resend from your custom domain.
+- [Stack](#stack)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+  - [1. Domain and inbound forwarding](#1-domain-and-inbound-forwarding)
+  - [2. Outbound email service](#2-outbound-email-service)
+  - [3. Gmail App Password](#3-gmail-app-password)
+  - [4. Outlook calendar feed](#4-outlook-calendar-feed)
+  - [5. Repository and secrets](#5-repository-and-secrets)
+  - [6. Gmail filters](#6-gmail-filters)
+  - [7. Hourly trigger](#7-hourly-trigger)
+- [Usage](#usage)
+- [Email examples](#email-examples)
+- [Configuration reference](#configuration-reference)
+- [Architecture notes](#architecture-notes)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
-**Any other hour:** the script only checks for new task commands in your Gmail inbox (via IMAP) and replies immediately if anything changed.
+## Stack
 
-**Editing tasks:** send any email to `morning@arfaz.ca` with commands like `add: X` or `done: X`. It arrives in your Gmail (via ImprovMX), gets picked up on the next hourly run (within 60 minutes), and you get a reply showing exactly what changed.
+| Component          | Service                     | Purpose                                                       |
+| ------------------ | --------------------------- | ------------------------------------------------------------- |
+| Runtime            | GitHub Actions (Ubuntu)     | Executes the Python script on demand                          |
+| Scheduler          | cron-job.org                | Triggers the workflow on the hour, every hour                 |
+| Language           | Python 3.12                 | Script logic                                                  |
+| Inbound mail       | ImprovMX                    | Forwards `*@yourdomain.tld` to a Gmail inbox                  |
+| Outbound mail      | Resend                      | Sends transactional email from your verified domain           |
+| Reply storage      | Gmail (IMAP)                | Holds incoming task commands until the script reads them      |
+| Calendar source    | Outlook published ICS feed  | Provides today's events without OAuth                         |
+| State              | `tasks.md` in this repo     | Single source of truth for the task list, committed by Actions |
+
+All services have free tiers that comfortably cover the load (one HTTP request per hour, a handful of emails per day).
+
+## Prerequisites
+
+Before starting, you will need:
+
+1. A GitHub account.
+2. A domain name you control. Any registrar works.
+3. A Gmail account. This receives forwarded mail and is the IMAP target.
+4. An Outlook account with a calendar you want to read. Personal or work, either is fine.
+
+The setup below walks through every external account creation.
 
 ## Setup
 
-### 1. ImprovMX (already done)
-`morning@arfaz.ca` forwards to your Gmail. No changes needed.
+### 1. Domain and inbound forwarding
 
-### 2. Resend (already done)
-Domain `arfaz.ca` verified. Grab your API key from resend.com/api-keys.
+You need any email sent to `morning@yourdomain.tld` to land in your Gmail inbox. ImprovMX does this for free.
+
+1. Sign up at [improvmx.com](https://improvmx.com).
+2. Add your domain.
+3. In your domain registrar's DNS settings, add the two MX records ImprovMX shows you. Wait for them to verify.
+4. Add an alias: `morning@yourdomain.tld` forwards to your Gmail address.
+
+You can stop here, or add more aliases. Every alias forwards to the same Gmail.
+
+### 2. Outbound email service
+
+You need to send email *from* `morning@yourdomain.tld`. ImprovMX does not handle outbound; Resend does.
+
+1. Sign up at [resend.com](https://resend.com).
+2. Add your domain.
+3. Add the SPF (TXT) and DKIM (CNAME) records Resend shows you. Skip any MX records Resend suggests, since those conflict with ImprovMX.
+4. Wait for verification (usually under five minutes).
+5. Generate an API key under "API Keys". Save it.
+
+Resend's free tier covers 3,000 emails per month. This system uses roughly 60.
 
 ### 3. Gmail App Password
-1. Enable 2-Step Verification at myaccount.google.com
-2. Go to myaccount.google.com/apppasswords
-3. Create one called `daily-digest`
-4. Save the 16-character password
 
-### 4. Publish your Outlook calendar as ICS
-1. Outlook web → Calendar → Settings (gear) → View all Outlook settings
-2. Calendar → Shared calendars
-3. Publish a calendar → pick yours → **Can view all details** → Publish
-4. Copy the `.ics` URL (not the HTML one)
+The Python script reads your Gmail over IMAP. Gmail requires an App Password for this, not your regular password.
 
-### 5. GitHub repo secrets
-Settings → Secrets and variables → Actions → New repository secret:
+1. Open [myaccount.google.com](https://myaccount.google.com).
+2. Security, then 2-Step Verification. Turn it on if it is not already.
+3. Security, then App passwords. Create one named `daily-digest`.
+4. Copy the 16-character password. Save it without the spaces.
 
-| Secret | Value |
-|---|---|
-| `GMAIL_USER` | Your Gmail address e.g. `you@gmail.com` |
-| `GMAIL_APP_PASSWORD` | The 16-char app password (no spaces) |
-| `OWNER_EMAIL` | Same Gmail - where the digest is delivered |
-| `FROM_EMAIL` | `morning@arfaz.ca` |
-| `RESEND_API_KEY` | Your Resend API key |
-| `ICS_URL` | The Outlook `.ics` URL |
-| `FORWARD_EMAILS` | Comma-separated list of extra addresses to BCC e.g. `you@outlook.com,other@gmail.com` - leave empty to skip |
+### 4. Outlook calendar feed
 
-### 6. Gmail filter (keeps inbox clean)
-1. Gmail → Settings → See all settings → Filters and Blocked Addresses → Create new filter
-2. **To:** `morning@arfaz.ca`
-3. Click **Create filter** → check **Skip the Inbox (Archive it)**
-4. Create filter
+The script reads your calendar by fetching a public ICS URL. No OAuth, no Azure app registration.
 
-Emails sent to `morning@arfaz.ca` land in All Mail (not your inbox). The script finds them there.
+1. Open Outlook on the web.
+2. Calendar, then Settings (gear icon), then "View all Outlook settings".
+3. Calendar, then Shared calendars.
+4. Under "Publish a calendar", choose the calendar you want and set permissions to **Can view all details**.
+5. Click Publish. Copy the **ICS** URL. (Outlook also shows an HTML URL: do not use that one.)
 
-### 7. cron-job.org (reliable hourly trigger)
-GitHub's built-in cron is unreliable (runs 1–3 hours late). cron-job.org fires exactly on the hour.
+The published feed refreshes on Outlook's side roughly every few hours. Newly added events may not appear in the digest immediately.
 
-1. Sign up at cron-job.org
-2. Create a new cron job - **Common tab:**
-   - URL: `https://api.github.com/repos/YOUR_USERNAME/DailyDigest/actions/workflows/daily-email.yml/dispatches`
-   - Schedule: every hour at `:00`
-3. **Advanced tab:**
-   - Request method: `POST`
-   - Request body: `{"ref":"main"}`
-   - Add headers:
+### 5. Repository and secrets
 
-| Key | Value |
-|---|---|
-| `Authorization` | `Bearer YOUR_GITHUB_PAT` |
-| `Content-Type` | `application/json` |
-| `Accept` | `application/vnd.github.v3+json` |
+1. Fork or clone this repository to your GitHub account. Keep it private if you prefer.
+2. Open Settings, then Secrets and variables, then Actions, then New repository secret. Add the following:
 
-**Getting the GitHub PAT:**
-- GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens
-- Repository: your DailyDigest repo
-- Permissions → Actions: **Read and write**
-- Generate and copy the token
+| Secret               | Value                                                                       |
+| -------------------- | --------------------------------------------------------------------------- |
+| `GMAIL_USER`         | Your Gmail address, e.g. `you@gmail.com`.                                   |
+| `GMAIL_APP_PASSWORD` | The 16-character App Password from step 3, no spaces.                       |
+| `OWNER_EMAIL`        | Where the digest is delivered. Usually `morning@yourdomain.tld`.            |
+| `FROM_EMAIL`         | The address the digest sends from, e.g. `morning@yourdomain.tld`.           |
+| `RESEND_API_KEY`     | The API key from step 2.                                                    |
+| `ICS_URL`            | The Outlook .ics URL from step 4.                                           |
+| `FORWARD_EMAILS`     | Optional. Comma-separated extra BCC recipients. Leave blank to skip.        |
 
-Hit **Test run** - you should see `204 No Content`. Check your GitHub Actions tab for a new run.
+If `OWNER_EMAIL` and `FROM_EMAIL` are both on your domain (recommended), the digest header shows `to: morning@yourdomain.tld` rather than your raw Gmail address.
 
-## Editing tasks
+### 6. Gmail filters
 
-Send any email to `morning@arfaz.ca` from any address. Within the hour you'll get a reply showing what changed.
+These keep your inbox clean. They are not required for the script to work, but recommended.
 
-**Commands (one per line, send as many as you want):**
+1. Gmail, then Settings, then See all settings, then Filters and Blocked Addresses, then Create a new filter.
+2. Filter 1, to silence outgoing digest noise:
+   - **From:** `morning@yourdomain.tld`
+   - Action: Skip Inbox, Mark as read, Apply label `DailyDigest/Updates`, Never mark as important.
+3. Filter 2, to silence incoming command emails:
+   - **To:** `morning@yourdomain.tld`
+   - Action: Skip Inbox, Apply label `DailyDigest/Logs`, Never mark as important.
+
+The script searches `[Gmail]/All Mail`, so archived emails are still found.
+
+### 7. Hourly trigger
+
+GitHub Actions' built-in cron is unreliable. It can run anywhere from 30 minutes to 3 hours late. cron-job.org calls the GitHub API directly and fires on the second.
+
+Full walkthrough is in [docs/cronjob-setup.md](docs/cronjob-setup.md). Brief version:
+
+1. Generate a GitHub fine-grained personal access token with `Actions: Read and write` on this repository.
+2. Sign up at [cron-job.org](https://cron-job.org).
+3. Create a job:
+   - URL: `https://api.github.com/repos/<your-username>/DailyDigest/actions/workflows/daily-email.yml/dispatches`
+   - Method: `POST`
+   - Body: `{"ref":"main"}`
+   - Headers: `Authorization: Bearer <your-PAT>`, `Content-Type: application/json`, `Accept: application/vnd.github.v3+json`
+   - Schedule: every hour at `:00`.
+4. Click Test run. A successful response is `204 No Content`.
+
+After cron-job.org fires, check your Actions tab. A new run should appear within seconds.
+
+## Usage
+
+Send any email to `morning@yourdomain.tld` from any address. Within an hour, the script processes it and replies.
+
+### Commands
+
+Place one command per line. The script reads every line, so you can batch several edits in one email.
+
+| Command          | Effect                                                                  |
+| ---------------- | ----------------------------------------------------------------------- |
+| `add: X`         | Appends `X` as a task. Duplicates (case-insensitive) are silently ignored. |
+| `done: X`        | Removes the first task whose text contains `X` (case-insensitive).      |
+| `remove: X`      | Same as `done: X`.                                                      |
+| `clear`          | Empties the list entirely.                                              |
+| `- item 1`<br>`- item 2`<br>`- item 3` | If the body is two or more bullet lines, the list is fully replaced. |
+
+If a line does not match any of these patterns, the script replies with a "Could not parse" message and ignores it. If a `done:` target does not match any existing task, the reply notes it as "not in list".
+
+### When emails go out
+
+- **6:00 AM, 12:00 PM, 6:00 PM Pacific:** the full digest with calendar and tasks.
+- **Any hour with a processed command:** a confirmation showing what changed plus the digest.
+- **Any other hour:** silent (nothing to send).
+
+## Email examples
+
+Screenshots of each email type. The HTML sources are in `docs/screenshots/` if you want to render them yourself.
+
+### Morning digest
+
+The scheduled email at 6 AM, 12 PM, and 6 PM. Lists today's upcoming events (past events are filtered out) and the current task list.
+
+![Morning digest example](docs/screenshots/digest.png)
+
+### Confirmation: single add
+
+After sending `add: pick up groceries`:
+
+![Add confirmation](docs/screenshots/confirmation-add.png)
+
+### Confirmation: mixed changes
+
+After sending three commands at once, one of which did not match:
 
 ```
-add: pick up groceries
-done: buy milk
-clear
+add: call accountant
+done: review PR
+done: submit timesheet
 ```
 
-**Replace your whole list** - send a bullet list:
+![Mixed confirmation](docs/screenshots/confirmation-mixed.png)
+
+### Confirmation: unrecognised command
+
+After sending something the parser does not understand:
+
+![Could not parse](docs/screenshots/confirmation-unknown.png)
+
+## Configuration reference
+
+### Environment variables
+
+All variables are passed as GitHub repository secrets and read by `scripts/digest.py`.
+
+| Name                 | Required | Description                                                                  |
+| -------------------- | -------- | ---------------------------------------------------------------------------- |
+| `GMAIL_USER`         | Yes      | Gmail address used for IMAP login.                                           |
+| `GMAIL_APP_PASSWORD` | Yes      | 16-character App Password for the Gmail account.                             |
+| `OWNER_EMAIL`        | Yes      | Recipient of every email the script sends.                                   |
+| `FROM_EMAIL`         | Yes      | Address the script sends from. Must be on a domain verified in Resend.       |
+| `RESEND_API_KEY`     | Yes      | Resend API key with sending permission.                                      |
+| `ICS_URL`            | Yes      | Public Outlook ICS URL.                                                      |
+| `FORWARD_EMAILS`     | No       | Comma-separated extra BCC recipients on every outgoing email.                |
+| `TIMEZONE`           | No       | IANA timezone string. Defaults to `America/Vancouver`.                       |
+
+### Schedule
+
+Defined in `.github/workflows/daily-email.yml`. The workflow has two triggers:
+
+- `repository_dispatch` with type `cron-trigger`: used by cron-job.org.
+- `workflow_dispatch`: manual trigger via the Actions UI.
+
+The decision of *what* to send happens inside the Python script, not the workflow. See `main()` in `scripts/digest.py`. To change the digest hours, edit this line:
+
+```python
+scheduled = NOW.hour in (6, 12, 18)
 ```
-- call dentist
-- submit report
-- pick up dry cleaning
+
+### Customising the digest email
+
+Edit `templates/email.html`. It is a single HTML file with a `<style>` block. Before sending, `premailer` inlines all CSS so it renders correctly in Gmail, Outlook, Apple Mail, and other clients.
+
+Jinja2 variables available in the template:
+
+| Variable    | Type    | Example                                          |
+| ----------- | ------- | ------------------------------------------------ |
+| `weekday`   | string  | `Monday`                                         |
+| `date_long` | string  | `May 12, 2026`                                   |
+| `events`    | list    | `[{"time": "9:00 am", "title": "Standup"}, ...]` |
+| `tasks`     | list    | `["Buy milk", "Reply to client"]`                |
+
+## Architecture notes
+
+### Why three external services instead of one?
+
+Each service does one thing well at the free tier:
+
+- **ImprovMX** handles inbound forwarding with MX records. It does not send.
+- **Resend** sends transactional email with SPF/DKIM. It does not receive (for free).
+- **Gmail** is where you read mail, and IMAP gives the script a way to find replies without setting up a webhook receiver.
+
+You could replace any one of these. The script only depends on Gmail IMAP being reachable and Resend's HTTP API being available.
+
+### IMAP search query
+
+The script searches `[Gmail]/All Mail` with Gmail's native `X-GM-RAW` syntax:
+
+```
+deliveredto:morning@yourdomain.tld newer_than:2d
 ```
 
-**Accepted from any sender** - ping@arfaz.ca, your Outlook, your other Gmail, anything. As long as it's addressed to `morning@arfaz.ca` it gets processed.
+`deliveredto:` matches the `Delivered-To` header that ImprovMX adds when forwarding. This works regardless of who sent the original email, so you can email `morning@yourdomain.tld` from any account and the script will find the message.
 
-If a command isn't understood, you'll get a reply explaining the valid formats.
+Already-processed messages are flagged `\Seen` after handling. Future runs skip them.
 
-## What you receive
+### Recurring calendar events
 
-**6 AM every morning:** a styled digest with today's upcoming calendar events (past events filtered out) and your full task list.
+`recurring-ical-events` expands ICS `RRULE` patterns into individual occurrences. Without this library, weekly recurring meetings would not appear in the digest because their `DTSTART` is in the past.
 
-**Any time you edit tasks:** an immediate confirmation showing what was added, removed, or not found - plus your updated list.
+Past events (events whose start time is before now) are filtered out so the digest never shows you meetings you have already finished.
 
-**Digest also BCC'd** to any addresses in `FORWARD_EMAILS` so you can read it across all your inboxes.
+### State persistence
 
-## File structure
+`tasks.md` lives in the repo. When the script changes the list, it commits the new file directly back to `main` using the workflow's `GITHUB_TOKEN`. The commit message is `Update tasks via email (YYYY-MM-DD)`. This keeps the task list versioned and inspectable.
+
+## Development
+
+### File structure
 
 ```
-├── scripts/digest.py        main script
-├── templates/email.html     digest email template (Jinja2 + inline CSS)
-├── tasks.md                 your task list (edit directly or via email)
-├── requirements.txt         Python dependencies
-└── .github/workflows/
-    └── daily-email.yml      GitHub Actions workflow
+.
+├── .github/
+│   └── workflows/
+│       ├── daily-email.yml       Main workflow. Triggered hourly.
+│       └── cleanup.yml           Deletes daily-email runs older than 2 days. Daily.
+├── docs/
+│   ├── cronjob-setup.md          cron-job.org configuration walkthrough.
+│   └── screenshots/              HTML sources for the email examples in this README.
+├── scripts/
+│   └── digest.py                 Main script. All logic.
+├── templates/
+│   └── email.html                Jinja2 template for the morning digest.
+├── tasks.md                      The task list. Committed by the workflow.
+├── requirements.txt              Python dependencies.
+├── LICENSE
+└── README.md
 ```
 
-## Customising the digest email
+### Local testing
 
-Edit `templates/email.html`. Variables available in the template:
+To run the script locally:
 
-| Variable | Example |
-|---|---|
-| `weekday` | `Monday` |
-| `date_long` | `May 11, 2026` |
-| `events` | list of `{time, title}` dicts |
-| `tasks` | list of strings |
+```bash
+git clone https://github.com/<your-username>/DailyDigest.git
+cd DailyDigest
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-## Cost
+Create a `.env` file (it is in `.gitignore`) with the same variables you set as GitHub secrets, then:
 
-| Service | Cost |
-|---|---|
-| GitHub Actions | Free (~360 min/month, well under the 2,000 limit) |
-| cron-job.org | Free |
-| Resend | Free (3,000 emails/month, you use ~60) |
-| ImprovMX | Free |
-| **Total** | **Free** |
+```bash
+set -a; source .env; set +a
+python scripts/digest.py
+```
+
+The script logs every step to stdout with timestamps. Output for a run that finds no commands and is not on a scheduled hour looks like:
+
+```
+[14:00:01] === Daily Digest starting ===
+[14:00:01] Local time: 2026-05-12 14:00 PDT
+[14:00:01] Connecting to IMAP as you@gmail.com
+[14:00:02] All Mail select: OK
+[14:00:02] IMAP search: X-GM-RAW "deliveredto:morning@arfaz.ca newer_than:2d"
+[14:00:03] Found 0 message(s) delivered to morning@arfaz.ca
+[14:00:03] Read 3 task(s): ['Buy milk', 'Reply to client', 'Review PR #284']
+[14:00:03] Hour 14 - skipping digest
+[14:00:03] === Done ===
+```
+
+### Modifying behaviour
+
+Common changes and where to make them:
+
+| Goal                              | File                              | Function or location              |
+| --------------------------------- | --------------------------------- | --------------------------------- |
+| Change digest send times          | `scripts/digest.py`               | `main()`, the `scheduled` line    |
+| Add a new command (e.g. priority) | `scripts/digest.py`               | `parse_commands()`                |
+| Change the visual style           | `templates/email.html`            | The `<style>` block               |
+| Change the confirmation styling   | `scripts/digest.py`               | `send_reply_summary()`            |
+| Change the IMAP search window     | `scripts/digest.py`               | `process_inbox()`, `newer_than`   |
 
 ## Troubleshooting
 
-**No digest at 6 AM** - check the Actions tab. Common causes: wrong Gmail app password, ICS URL expired, Resend API key wrong.
+**Workflow runs but no email arrives.** Check the Actions run log. Common causes: invalid Gmail App Password (must be 16 characters with no spaces), Resend API key revoked, `FROM_EMAIL` not on a verified Resend domain.
 
-**Task reply not picked up** - make sure the email was sent TO `morning@arfaz.ca`. Check the Actions run log for the IMAP search results.
+**Task command not picked up.** Verify the email landed in Gmail by checking `[Gmail]/All Mail` for the address `morning@yourdomain.tld`. If it is there, check the run log for the IMAP search output. If the search returned 0 messages, the `Delivered-To` header may not match `FROM_EMAIL`.
 
-**Cron job returning 404** - the GitHub PAT token expired or lost permissions. Regenerate it.
+**cron-job.org returns 404.** The PAT does not have access to the repository, or the URL is wrong. Confirm the token has `Actions: Read and write` on the specific repo and the URL spells the repo name correctly.
 
-**Cron job returning 401** - the `Authorization` header value must start with `Bearer ` (with a space) before the token.
+**cron-job.org returns 401.** The `Authorization` header is malformed. The value must be exactly `Bearer <token>` with a space after `Bearer`.
 
-**Calendar showing old events** - Outlook's published ICS feed refreshes every few hours. Events added recently may not appear until the next feed refresh.
+**Calendar empty when it should not be.** Outlook publishes the ICS feed on its own schedule (every few hours). Newly added events may not appear until Outlook refreshes the feed. Also verify the ICS URL works in a browser.
+
+**Workflow run history fills up.** The `cleanup.yml` workflow runs daily and deletes `daily-email.yml` runs older than 2 days. If it stops working, check the Actions tab for failed cleanup runs.
+
+## License
+
+MIT with attribution. See [LICENSE](LICENSE).
+
+You can use this code in personal or commercial projects, modify it, and redistribute it.
