@@ -4,6 +4,8 @@ A self-hosted daily email assistant. Every morning, afternoon, and evening it se
 
 The entire system runs on free services and Git: a Python script in GitHub Actions, an HTTP scheduler, a transactional email API, and IMAP.
 
+Oh btw, task.md will be replaced soon by a database.
+
 ## Contents
 
 - [Stack](#stack)
