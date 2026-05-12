@@ -171,7 +171,23 @@ If a line does not match any of these patterns, the script replies with a "Could
 
 ## Email examples
 
-Screenshots of each email type. The HTML sources are in `docs/screenshots/` if you want to render them yourself.
+Screenshots of each email type. The HTML sources are in `docs/html/` if you want to render them yourself. I rendered it here using Chrome directly in `docs/screenshots/` since both imagemagick and wkhtmltopdf failed in my silicon machine for my rendering needs.
+
+```
+for file in *.html; do
+  name="${file%.html}"
+  /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+    --headless \
+    --disable-gpu \
+    --hide-scrollbars \
+    --window-size=1440,2000 \
+    --screenshot="${name}.png" \
+    "file://$(pwd)/$file"
+  sips -s format jpeg "${name}.png" --out "${name}.jpg" >/dev/null
+  rm "${name}.png"
+  echo "Converted $file -> ${name}.jpg"
+done
+```
 
 ### Morning digest
 
