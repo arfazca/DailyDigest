@@ -2,9 +2,7 @@
 
 A self-hosted daily email assistant. Every morning, afternoon, and evening it sends a digest of the day's calendar events and an editable task list. Tasks are managed entirely over email: send a command, get a reply, the change persists.
 
-The entire system runs on free services and Git: a Python script in GitHub Actions, an HTTP scheduler, a transactional email API, and IMAP.
-
-Oh btw, task.md will be replaced soon by a database.
+The entire system runs on free services: a Python script in GitHub Actions, an HTTP scheduler, a transactional email API, IMAP, and a Postgres database.
 
 ## Contents
 
@@ -37,7 +35,7 @@ Oh btw, task.md will be replaced soon by a database.
 | Outbound mail      | Resend                      | Sends transactional email from your verified domain           |
 | Reply storage      | Gmail (IMAP)                | Holds incoming task commands until the script reads them      |
 | Calendar source    | Outlook published ICS feed  | Provides today's events without OAuth                         |
-| State              | `tasks.md` in this repo     | Single source of truth for the task list, committed by Actions |
+| State              | Neon (PostgreSQL)           | Stores the task list                                          |
 
 All services have free tiers that comfortably cover the load (one HTTP request per hour, a handful of emails per day).
 
@@ -111,6 +109,7 @@ The published feed refreshes on Outlook's side roughly every few hours. Newly ad
 | `FROM_EMAIL`         | The address the digest sends from, e.g. `morning@yourdomain.tld`.           |
 | `RESEND_API_KEY`     | The API key from step 2.                                                    |
 | `ICS_URL`            | The Outlook .ics URL from step 4.                                           |
+| `DATABASE_URL`       | The Neon connection string (PostgreSQL). Found in your Neon project dashboard. |
 | `FORWARD_EMAILS`     | Optional. Comma-separated extra BCC recipients. Leave blank to skip.        |
 
 If `OWNER_EMAIL` and `FROM_EMAIL` are both on your domain (recommended), the digest header shows `to: morning@yourdomain.tld` rather than your raw Gmail address.
@@ -235,6 +234,7 @@ All variables are passed as GitHub repository secrets and read by `scripts/diges
 | `FROM_EMAIL`         | Yes      | Address the script sends from. Must be on a domain verified in Resend.       |
 | `RESEND_API_KEY`     | Yes      | Resend API key with sending permission.                                      |
 | `ICS_URL`            | Yes      | Public Outlook ICS URL.                                                      |
+| `DATABASE_URL`       | Yes      | Neon PostgreSQL connection string.                                           |
 | `FORWARD_EMAILS`     | No       | Comma-separated extra BCC recipients on every outgoing email.                |
 | `TIMEZONE`           | No       | IANA timezone string. Defaults to `America/Vancouver`.                       |
 
@@ -296,7 +296,7 @@ Past events (events whose start time is before now) are filtered out so the dige
 
 ### State persistence
 
-`tasks.md` lives in the repo. When the script changes the list, it commits the new file directly back to `main` using the workflow's `GITHUB_TOKEN`. The commit message is `Update tasks via email (YYYY-MM-DD)`. This keeps the task list versioned and inspectable.
+The task list lives in a Neon PostgreSQL database. When the script processes a command, it writes the updated list directly to the `tasks` table. No git commits are made for task changes.
 
 ## Development
 
@@ -315,7 +315,6 @@ Past events (events whose start time is before now) are filtered out so the dige
 │   └── digest.py                 Main script. All logic.
 ├── templates/
 │   └── email.html                Jinja2 template for the morning digest.
-├── tasks.md                      The task list. Committed by the workflow.
 ├── requirements.txt              Python dependencies.
 ├── LICENSE
 └── README.md
