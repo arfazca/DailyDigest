@@ -8,8 +8,6 @@ on:
 jobs:
   send:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v6
 
@@ -30,5 +28,6 @@ jobs:
           FORWARD_EMAILS: ${{ secrets.FORWARD_EMAILS }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ICS_URL: ${{ secrets.ICS_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TIMEZONE: America/Vancouver
         run: python scripts/digest.py

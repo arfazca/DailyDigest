@@ -4,11 +4,11 @@ import email
 import imaplib
 import os
 import re
-import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import psycopg2
 import recurring_ical_events
 import requests
 from email_reply_parser import EmailReplyParser
@@ -23,10 +23,10 @@ FROM_EMAIL         = os.environ["FROM_EMAIL"]
 FORWARD_EMAILS     = [e.strip() for e in os.environ.get("FORWARD_EMAILS", "").split(",") if e.strip()]
 RESEND_API_KEY     = os.environ["RESEND_API_KEY"]
 ICS_URL            = os.environ["ICS_URL"]
+DATABASE_URL       = os.environ["DATABASE_URL"]
 TIMEZONE           = os.environ.get("TIMEZONE", "America/Vancouver")
 
 REPO_ROOT     = Path(__file__).resolve().parent.parent
-TASKS_FILE    = REPO_ROOT / "tasks.md"
 TEMPLATE_FILE = REPO_ROOT / "templates" / "email.html"
 
 TZ    = ZoneInfo(TIMEZONE)
@@ -38,24 +38,20 @@ def log(msg):
     print(f"[{datetime.now(TZ).strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def read_tasks():
-    if not TASKS_FILE.exists():
-        log("tasks.md not found - starting empty")
-        return []
-    tasks = []
-    for line in TASKS_FILE.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        m = re.match(r"^[-*+]\s+(.*)$", line)
-        tasks.append(m.group(1).strip() if m else line)
+def read_tasks(conn):
+    with conn.cursor() as cur:
+        cur.execute("SELECT text FROM tasks ORDER BY id")
+        tasks = [row[0] for row in cur.fetchall()]
     log(f"Read {len(tasks)} task(s): {tasks}")
     return tasks
 
 
-def write_tasks(tasks):
-    body = "# Tasks\n\n" + ("\n".join(f"- {t}" for t in tasks) + "\n" if tasks else "")
-    TASKS_FILE.write_text(body)
+def write_tasks(conn, tasks):
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM tasks")
+        if tasks:
+            cur.executemany("INSERT INTO tasks (text) VALUES (%s)", [(t,) for t in tasks])
+    conn.commit()
     log(f"Wrote {len(tasks)} task(s)")
 
 
@@ -108,7 +104,7 @@ def get_text_body(msg) -> str:
     )
 
 
-def process_inbox():
+def process_inbox(conn):
     log(f"Connecting to IMAP as {GMAIL_USER}")
     M = imaplib.IMAP4_SSL("imap.gmail.com")
     M.login(GMAIL_USER, GMAIL_APP_PASSWORD)
@@ -121,7 +117,7 @@ def process_inbox():
     msg_ids = data[0].split()
     log(f"Found {len(msg_ids)} message(s) delivered to {FROM_EMAIL}")
 
-    tasks        = read_tasks()
+    tasks        = read_tasks(conn)
     successes    = []
     not_found    = []
     unknowns     = []
@@ -175,7 +171,7 @@ def process_inbox():
     M.logout()
 
     if successes:
-        write_tasks(tasks)
+        write_tasks(conn, tasks)
         log(f"Changes: {successes}")
 
     return tasks, successes, not_found, unknowns
@@ -347,38 +343,18 @@ def send_reply_summary(successes, not_found, unknowns, tasks):
     _resend(subject, html)
 
 
-def git_commit_if_changed():
-    result = subprocess.run(
-        ["git", "status", "--porcelain", "tasks.md"], capture_output=True, text=True
-    )
-    if not result.stdout.strip():
-        log("No changes to commit")
-        return
-    subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=True)
-    subprocess.run(
-        ["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"],
-        check=True,
-    )
-    subprocess.run(["git", "add", "tasks.md"], check=True)
-    subprocess.run(
-        ["git", "commit", "-m", f"Update tasks via email ({NOW.strftime('%Y-%m-%d')})"],
-        check=True,
-    )
-    subprocess.run(["git", "push"], check=True)
-    log("Committed and pushed tasks.md")
-
-
 def main():
     log("=== Daily Digest starting ===")
     log(f"Local time: {NOW.strftime('%Y-%m-%d %H:%M %Z')}")
 
-    tasks, successes, not_found, unknowns = process_inbox()
+    conn = psycopg2.connect(DATABASE_URL)
+    try:
+        tasks, successes, not_found, unknowns = process_inbox(conn)
+    finally:
+        conn.close()
 
     if successes or not_found or unknowns:
         send_reply_summary(successes, not_found, unknowns, tasks)
-
-    if successes:
-        git_commit_if_changed()
 
     scheduled = NOW.hour in (6, 12, 18)
     if successes or scheduled:
