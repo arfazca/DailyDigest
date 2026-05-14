@@ -33,5 +33,6 @@ jobs:
           BIRTHDATE: ${{ secrets.BIRTHDATE }}
           WEATHER_LAT: ${{ secrets.WEATHER_LAT }}
           WEATHER_LON: ${{ secrets.WEATHER_LON }}
+          CONCEPT2_TOKEN: ${{ secrets.CONCEPT2_TOKEN }}
           TIMEZONE: America/Vancouver
         run: python scripts/digest.py
