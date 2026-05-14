@@ -1,8 +1,16 @@
 # DailyDigest
 
-A self-hosted daily email assistant. Every morning, afternoon, and evening it sends a digest of the day's calendar events and an editable task list. Tasks are managed entirely over email: send a command, get a reply, the change persists.
+A self-hosted daily email assistant. At 6 AM, 12 PM, and 6 PM you get a digest that combines:
 
-The entire system runs on free services: a Python script in GitHub Actions, an HTTP scheduler, a transactional email API, IMAP, and a Postgres database.
+- A **due-date dashboard** with traffic-light coloring (green → red as deadlines approach)
+- **Hourly weather** for the rest of the day (OpenWeather One Call)
+- An **aggregated timeline** of every ICS calendar you've added, with past events shown greyed-out for context
+- **Short-term** and **long-term** task lists (with optional due dates, optional `#grocery` bucket)
+- **Countdowns**, **reflections**, **age** (at 6 AM), and a **motivational quote** at the bottom
+
+Tasks, calendars, countdowns, and reflections are all managed by replying to the digest. Send `add "task"`, `add long task "X" due 7 oct 2027`, `show calendar`, `done "X"`. The full command grammar is in [docs/commands.md](docs/commands.md).
+
+The entire system runs on free tiers: a Python script in GitHub Actions, an HTTP scheduler, a transactional email API, IMAP, a Postgres database, OpenWeather, and ZenQuotes (with Quotable as fallback).
 
 ## Contents
 
@@ -26,16 +34,18 @@ The entire system runs on free services: a Python script in GitHub Actions, an H
 
 ## Stack
 
-| Component          | Service                     | Purpose                                                       |
-| ------------------ | --------------------------- | ------------------------------------------------------------- |
-| Runtime            | GitHub Actions (Ubuntu)     | Executes the Python script on demand                          |
-| Scheduler          | cron-job.org                | Triggers the workflow on the hour, every hour                 |
-| Language           | Python 3.12                 | Script logic                                                  |
-| Inbound mail       | ImprovMX                    | Forwards `*@yourdomain.tld` to a Gmail inbox                  |
-| Outbound mail      | Resend                      | Sends transactional email from your verified domain           |
-| Reply storage      | Gmail (IMAP)                | Holds incoming task commands until the script reads them      |
-| Calendar source    | Outlook published ICS feed  | Provides today's events without OAuth                         |
-| State              | Neon (PostgreSQL)           | Stores the task list                                          |
+| Component       | Service                    | Purpose                                                          |
+| --------------- | -------------------------- | ---------------------------------------------------------------- |
+| Runtime         | GitHub Actions (Ubuntu)    | Executes the Python script on demand                             |
+| Scheduler       | cron-job.org               | Triggers the workflow on the hour, every hour                    |
+| Language        | Python 3.12                | Script logic                                                     |
+| Inbound mail    | ImprovMX                   | Forwards `*@yourdomain.tld` to a Gmail inbox                     |
+| Outbound mail   | Resend                     | Sends transactional email from your verified domain              |
+| Reply storage   | Gmail (IMAP)               | Holds incoming task commands until the script reads them         |
+| Calendar source | Any ICS feed (multiple)    | Outlook, Google, iCloud, etc. — added via `add calendar "..." URL` |
+| Weather         | OpenWeather One Call 3.0   | Hourly forecast (free tier: 1k calls/day)                        |
+| Quotes          | ZenQuotes → Quotable       | Daily motivational quote, cached in DB                           |
+| State           | Neon (PostgreSQL)          | Tasks, long tasks, countdowns, reflections, profile, debug log   |
 
 All services have free tiers that comfortably cover the load (one HTTP request per hour, a handful of emails per day).
 
@@ -101,16 +111,20 @@ The published feed refreshes on Outlook's side roughly every few hours. Newly ad
 1. Fork or clone this repository to your GitHub account. Keep it private if you prefer.
 2. Open Settings, then Secrets and variables, then Actions, then New repository secret. Add the following:
 
-| Secret               | Value                                                                       |
-| -------------------- | --------------------------------------------------------------------------- |
-| `GMAIL_USER`         | Your Gmail address, e.g. `you@gmail.com`.                                   |
-| `GMAIL_APP_PASSWORD` | The 16-character App Password from step 3, no spaces.                       |
-| `OWNER_EMAIL`        | Where the digest is delivered. Usually `morning@yourdomain.tld`.            |
-| `FROM_EMAIL`         | The address the digest sends from, e.g. `morning@yourdomain.tld`.           |
-| `RESEND_API_KEY`     | The API key from step 2.                                                    |
-| `ICS_URL`            | The Outlook .ics URL from step 4.                                           |
-| `DATABASE_URL`       | The Neon connection string (PostgreSQL). Found in your Neon project dashboard. |
-| `FORWARD_EMAILS`     | Optional. Comma-separated extra BCC recipients. Leave blank to skip.        |
+| Secret                | Value                                                                       |
+| --------------------- | --------------------------------------------------------------------------- |
+| `GMAIL_USER`          | Your Gmail address, e.g. `you@gmail.com`.                                   |
+| `GMAIL_APP_PASSWORD`  | The 16-character App Password from step 3, no spaces.                       |
+| `OWNER_EMAIL`         | Where the digest is delivered. Usually `morning@yourdomain.tld`.            |
+| `FROM_EMAIL`          | The address the digest sends from, e.g. `morning@yourdomain.tld`.           |
+| `RESEND_API_KEY`      | The API key from step 2.                                                    |
+| `ICS_URL`             | Your first ICS feed. Used to seed the `calendars` table on first run. Additional calendars are added later via `add calendar "Name" URL`. |
+| `DATABASE_URL`        | The Neon connection string (PostgreSQL). Found in your Neon project dashboard. |
+| `OPENWEATHER_API_KEY` | OpenWeather One Call 3.0 key. Sign up at [openweathermap.org](https://openweathermap.org/api/one-call-3). |
+| `WEATHER_LAT`         | Latitude (e.g. `48.42841`). Seeds the `profile` table on first run.         |
+| `WEATHER_LON`         | Longitude (e.g. `-123.36564`). Seeds the `profile` table on first run.      |
+| `BIRTHDATE`           | `YYYY-MM-DD`, e.g. `2002-06-15`. Seeds the `profile` table on first run.    |
+| `FORWARD_EMAILS`      | Optional. Comma-separated extra BCC recipients. Leave blank to skip.        |
 
 If `OWNER_EMAIL` and `FROM_EMAIL` are both on your domain (recommended), the digest header shows `to: morning@yourdomain.tld` rather than your raw Gmail address.
 
@@ -148,77 +162,57 @@ After cron-job.org fires, check your Actions tab. A new run should appear within
 
 ## Usage
 
-Send any email to `morning@yourdomain.tld` from any address. Within an hour, the script processes it and replies.
+Send any email to `morning@yourdomain.tld` from any address. At the next hourly run, the script reads every unprocessed message, applies the commands across all of them, and replies with **exactly one** email summarizing everything.
 
-### Commands
+### Commands at a glance
 
-Place one command per line. The script reads every line, so you can batch several edits in one email.
+| Goal                          | Example                                                       |
+| ----------------------------- | ------------------------------------------------------------- |
+| Add a short task              | `add "buy detergent"`                                         |
+| Add with a bucket             | `add "milk" #grocery`                                         |
+| Add a long task (due required) | `add long task "M license exam" due 7 october 2027`          |
+| Add a short task with due time | `add "submit timesheet" due friday 5pm`                      |
+| Add a countdown               | `add countdown "graduation" 15 june 2026`                     |
+| Add a reflection              | `add reflection for week "review React patterns"`             |
+| Add another calendar          | `add calendar "Work" https://...ics`                          |
+| Remove anything               | `done "detergent"` · `remove countdown "graduation"`          |
+| Request the full digest now   | `show` / `show everything` / `show current`                   |
+| Request one section           | `show calendar` · `show weather` · `show due` · `show grocery` |
 
-| Command          | Effect                                                                  |
-| ---------------- | ----------------------------------------------------------------------- |
-| `add: X`         | Appends `X` as a task. Duplicates (case-insensitive) are silently ignored. |
-| `done: X`        | Removes the first task whose text contains `X` (case-insensitive).      |
-| `remove: X`      | Same as `done: X`.                                                      |
-| `clear`          | Empties the list entirely.                                              |
-| `- item 1`<br>`- item 2`<br>`- item 3` | If the body is two or more bullet lines, the list is fully replaced. |
+Full reference, all aliases, date formats, and parser rules: [docs/commands.md](docs/commands.md).
 
-If a line does not match any of these patterns, the script replies with a "Could not parse" message and ignores it. If a `done:` target does not match any existing task, the reply notes it as "not in list".
+The parser only acts on lines that **begin with a verb** (`add`, `+`, `done`, `remove`, `delete`, `del`, `show`). Everything else — signatures, "Warm regards", quoted reply text — is ignored silently. `add`/`done`/`remove` payloads must be in quotes (`"..."`); `show` takes an unquoted keyword.
 
 ### When emails go out
 
-- **6:00 AM, 12:00 PM, 6:00 PM Pacific:** the full digest with calendar and tasks.
-- **Any hour with a processed command:** a confirmation showing what changed plus the digest.
-- **Any other hour:** silent (nothing to send).
+Each run produces at most **one** email, decided as:
+
+1. **Full digest** — at 6 AM / 12 PM / 6 PM, or when you sent `show` / `show everything` / `show current`. Includes a "What changed" banner if any task/calendar/countdown/reflection commands were processed this run.
+2. **Partial show email** — when you sent a specific `show <section>`. Only that section. Includes "What changed" if other commands were processed too.
+3. **Tasks-updated email** — when you sent commands but didn't ask to show anything, outside of scheduled hours. Contains the "What changed" banner plus the rest-of-day calendar/weather only.
+4. **Errors-only email** — only if every keyword-starting line failed to parse and nothing else happened.
+5. Otherwise silent.
+
+The 6 AM digest additionally shows your age (years/months/days) and how far you are from your next birthday.
 
 ## Email examples
 
-Screenshots of each email type. The HTML sources are in `docs/html/` if you want to render them yourself. I rendered it here using Chrome directly in `docs/screenshots/` since both imagemagick and wkhtmltopdf failed in my silicon machine for my rendering needs.
+The HTML sources in `docs/html/` are stale relative to the post-revamp template (sections were renamed, weather and dues added). Regenerate them by running a single end-to-end execution against a dev DB, or render directly from `templates/email.html` with a synthetic context dict.
 
-```
+To rasterize whatever HTML samples you do produce:
+
+```bash
 for file in *.html; do
   name="${file%.html}"
   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-    --headless \
-    --disable-gpu \
-    --hide-scrollbars \
-    --window-size=1440,2000 \
+    --headless --disable-gpu --hide-scrollbars \
+    --window-size=1440,2400 \
     --screenshot="${name}.png" \
     "file://$(pwd)/$file"
   sips -s format jpeg "${name}.png" --out "${name}.jpg" >/dev/null
   rm "${name}.png"
-  echo "Converted $file -> ${name}.jpg"
 done
 ```
-
-### Morning digest
-
-The scheduled email at 6 AM, 12 PM, and 6 PM. Lists today's upcoming events (past events are filtered out) and the current task list.
-
-![Morning digest example](docs/screenshots/digest.png)
-
-### Confirmation: single add
-
-After sending `add: pick up groceries`:
-
-![Add confirmation](docs/screenshots/confirmation-add.png)
-
-### Confirmation: mixed changes
-
-After sending three commands at once, one of which did not match:
-
-```
-add: call accountant
-done: review PR
-done: submit timesheet
-```
-
-![Mixed confirmation](docs/screenshots/confirmation-mixed.png)
-
-### Confirmation: unrecognised command
-
-After sending something the parser does not understand:
-
-![Could not parse](docs/screenshots/confirmation-unknown.png)
 
 ## Configuration reference
 
@@ -226,17 +220,23 @@ After sending something the parser does not understand:
 
 All variables are passed as GitHub repository secrets and read by `scripts/digest.py`.
 
-| Name                 | Required | Description                                                                  |
-| -------------------- | -------- | ---------------------------------------------------------------------------- |
-| `GMAIL_USER`         | Yes      | Gmail address used for IMAP login.                                           |
-| `GMAIL_APP_PASSWORD` | Yes      | 16-character App Password for the Gmail account.                             |
-| `OWNER_EMAIL`        | Yes      | Recipient of every email the script sends.                                   |
-| `FROM_EMAIL`         | Yes      | Address the script sends from. Must be on a domain verified in Resend.       |
-| `RESEND_API_KEY`     | Yes      | Resend API key with sending permission.                                      |
-| `ICS_URL`            | Yes      | Public Outlook ICS URL.                                                      |
-| `DATABASE_URL`       | Yes      | Neon PostgreSQL connection string.                                           |
-| `FORWARD_EMAILS`     | No       | Comma-separated extra BCC recipients on every outgoing email.                |
-| `TIMEZONE`           | No       | IANA timezone string. Defaults to `America/Vancouver`.                       |
+| Name                  | Required  | Description                                                                                       |
+| --------------------- | --------- | ------------------------------------------------------------------------------------------------- |
+| `GMAIL_USER`          | Yes       | Gmail address used for IMAP login.                                                                |
+| `GMAIL_APP_PASSWORD`  | Yes       | 16-character App Password for the Gmail account.                                                  |
+| `OWNER_EMAIL`         | Yes       | Recipient of every email the script sends.                                                        |
+| `FROM_EMAIL`          | Yes       | Address the script sends from. Must be on a domain verified in Resend.                            |
+| `RESEND_API_KEY`      | Yes       | Resend API key with sending permission.                                                           |
+| `DATABASE_URL`        | Yes       | Neon PostgreSQL connection string.                                                                |
+| `ICS_URL`             | Bootstrap | First ICS feed. Used once to seed the `calendars` table; further calendars are added by command.  |
+| `OPENWEATHER_API_KEY` | Yes       | OpenWeather One Call 3.0 key. Falls back to `/data/2.5/forecast` if 3.0 returns 401.              |
+| `WEATHER_LAT`         | Bootstrap | Latitude. Seeds the `profile` table on first run.                                                 |
+| `WEATHER_LON`         | Bootstrap | Longitude. Seeds the `profile` table on first run.                                                |
+| `BIRTHDATE`           | Bootstrap | `YYYY-MM-DD`. Seeds the `profile` table on first run. Drives age display + birthday countdown.    |
+| `FORWARD_EMAILS`      | No        | Comma-separated extra BCC recipients on every outgoing email.                                     |
+| `TIMEZONE`            | No        | IANA timezone string. Defaults to `America/Vancouver`.                                            |
+
+**Bootstrap** secrets are read only when the corresponding row in Postgres is empty. After the first successful run, you can rotate `BIRTHDATE`/`WEATHER_LAT`/`WEATHER_LON`/`ICS_URL` to whatever you like (or remove them) — the DB rows are now the source of truth.
 
 ### Schedule
 
@@ -245,24 +245,33 @@ Defined in `.github/workflows/daily-email.yml`. The workflow has two triggers:
 - `repository_dispatch` with type `cron-trigger`: used by cron-job.org.
 - `workflow_dispatch`: manual trigger via the Actions UI.
 
-The decision of *what* to send happens inside the Python script, not the workflow. See `main()` in `scripts/digest.py`. To change the digest hours, edit this line:
+The decision of *what* to send happens inside the Python script, not the workflow. See `_decide_email()` in [scripts/digest.py](scripts/digest.py). To change the digest hours:
 
 ```python
-scheduled = NOW.hour in (6, 12, 18)
+SCHEDULED_HOURS = {6, 12, 18}
 ```
 
 ### Customising the digest email
 
-Edit `templates/email.html`. It is a single HTML file with a `<style>` block. Before sending, `premailer` inlines all CSS so it renders correctly in Gmail, Outlook, Apple Mail, and other clients.
+Edit [templates/email.html](templates/email.html). It is one HTML file with a `<style>` block; every visible block is wrapped in `{% if 'section_name' in sections %}` so the same template renders both the full digest and a partial `show calendar` email.
 
-Jinja2 variables available in the template:
+Section flags the renderer can pass in `sections`:
 
-| Variable    | Type    | Example                                          |
-| ----------- | ------- | ------------------------------------------------ |
-| `weekday`   | string  | `Monday`                                         |
-| `date_long` | string  | `May 12, 2026`                                   |
-| `events`    | list    | `[{"time": "9:00 am", "title": "Standup"}, ...]` |
-| `tasks`     | list    | `["Buy milk", "Reply to client"]`                |
+| Section name  | Renders                                  |
+| ------------- | ---------------------------------------- |
+| `age`         | Age line (6 AM only)                     |
+| `due`         | Due-date dashboard                       |
+| `weather`     | Hourly weather forecast                  |
+| `calendar`    | Aggregated ICS timeline with past events |
+| `short`       | Short tasks + buckets                    |
+| `long`        | Long tasks                               |
+| `grocery`     | Grocery bucket only (partial show)       |
+| `countdowns`  | All countdowns                           |
+| `countdown`   | Filtered single countdown                |
+| `reflection`  | Active reflections                       |
+| `quote`       | Bottom quote card                        |
+
+The "What changed" and "Could not parse" banners render whenever `change_log`/`not_found`/`unknowns` are non-empty, regardless of `sections`.
 
 ## Architecture notes
 
@@ -292,30 +301,62 @@ Already-processed messages are flagged `\Seen` after handling. Future runs skip 
 
 `recurring-ical-events` expands ICS `RRULE` patterns into individual occurrences. Without this library, weekly recurring meetings would not appear in the digest because their `DTSTART` is in the past.
 
-Past events (events whose start time is before now) are filtered out so the digest never shows you meetings you have already finished.
+Past events are **kept** in the timeline now, but rendered with a `.past` CSS class (strike-through time, greyed-out title) so you can see what's already happened today in the same chronological order. Old behavior (silently filtering past events) was removed in the revamp.
 
 ### State persistence
 
-The task list lives in a Neon PostgreSQL database. When the script processes a command, it writes the updated list directly to the `tasks` table. No git commits are made for task changes.
+Everything is in Neon Postgres. The schema (created idempotently by `db.run_migrations` on every run):
+
+- `profile` — single-row config: birthdate, weather lat/lon, timezone
+- `calendars` — every ICS feed (the original `ICS_URL` seeds the first row)
+- `tasks_short`, `tasks_long` — the two task lists (old `tasks` table is auto-migrated into `tasks_short` on first run, then dropped)
+- `countdowns`, `reflections` — named timers and time-limited reflections
+- `events_cache` — last-fetched events per calendar (debug / cross-checking)
+- `weather_cache`, `quote_cache` — daily-or-shorter caches for the external APIs
+- `processed_emails` — every Gmail message UID we have already acted on (dedupe across `\Seen` failures)
+- `pending_changes` — every command applied this run, marked `notified_at` once the outbound email is sent
+- `debug_log` — per-run UUID + timestamped log lines, 7-day retention
+
+No git commits are made for state changes; everything lives in the DB.
+
+### Debugging a bad run
+
+Every email and every command path writes to `debug_log` with the same `run_id` (a UUID generated at the top of `main()`). To see the latest run:
+
+```sql
+SELECT ts, level, message
+FROM debug_log
+WHERE run_id = (SELECT run_id FROM debug_log ORDER BY ts DESC LIMIT 1)
+ORDER BY ts;
+```
+
+The same lines are also `print()`-ed to stdout, so they're visible in the GitHub Actions run log.
 
 ## Development
 
 ### File structure
 
-```
+```text
 .
-├── .github/
-│   └── workflows/
-│       ├── daily-email.yml       Main workflow. Triggered hourly.
-│       └── cleanup.yml           Deletes daily-email runs older than 2 days. Daily.
+├── .github/workflows/
+│   ├── daily-email.yml         Main workflow, triggered hourly via cron-job.org.
+│   └── cleanup.yml             Deletes daily-email runs older than 2 days.
 ├── docs/
-│   ├── cronjob-setup.md          cron-job.org configuration walkthrough.
-│   └── screenshots/              HTML sources for the email examples in this README.
+│   ├── commands.md             Full command grammar + parser rules.
+│   ├── cronjob-setup.md        cron-job.org configuration walkthrough.
+│   ├── html/                   Sample rendered emails (regenerate after revamp).
+│   └── screenshots/            Screenshots for README.
 ├── scripts/
-│   └── digest.py                 Main script. All logic.
+│   ├── digest.py               Entrypoint + run decision tree.
+│   ├── db.py                   Postgres schema + every DB I/O function.
+│   ├── parser.py               Command grammar; pure function.
+│   ├── fetchers.py             ICS aggregation, OpenWeather, quote fallback.
+│   ├── imap_inbox.py           IMAP read + DB-backed dedupe.
+│   ├── render.py               Jinja + premailer + section shaping helpers.
+│   └── sender.py               Resend HTTP wrapper.
 ├── templates/
-│   └── email.html                Jinja2 template for the morning digest.
-├── requirements.txt              Python dependencies.
+│   └── email.html              One template; sections gated by `{% if X in sections %}`.
+├── requirements.txt
 ├── LICENSE
 └── README.md
 ```
@@ -339,31 +380,40 @@ set -a; source .env; set +a
 python scripts/digest.py
 ```
 
-The script logs every step to stdout with timestamps. Output for a run that finds no commands and is not on a scheduled hour looks like:
+The script writes every step both to stdout (visible in GitHub Actions) and to the `debug_log` table (queryable later). A run that finds nothing to do logs roughly:
 
+```text
+[INFO] === run start 6f2a8c... at 2026-05-14T14:00:01-07:00 ===
+[INFO] IMAP connect you@gmail.com
+[INFO] select All Mail: OK
+[INFO] IMAP returned 0 message(s)
+[INFO] IMAP unprocessed: 0
+[INFO] decision: kind=None sections=[]
+[INFO] nothing to send; exiting
+[INFO] === run end 6f2a8c... ===
 ```
-[14:00:01] === Daily Digest starting ===
-[14:00:01] Local time: 2026-05-12 14:00 PDT
-[14:00:01] Connecting to IMAP as you@gmail.com
-[14:00:02] All Mail select: OK
-[14:00:02] IMAP search: X-GM-RAW "deliveredto:morning@arfaz.ca newer_than:2d"
-[14:00:03] Found 0 message(s) delivered to morning@arfaz.ca
-[14:00:03] Read 3 task(s): ['Buy milk', 'Reply to client', 'Review PR #284']
-[14:00:03] Hour 14 - skipping digest
-[14:00:03] === Done ===
+
+A run that processes a `show calendar` email at 2 PM logs:
+
+```text
+[INFO] IMAP unprocessed: 1
+[INFO] decision: kind=partial sections=['calendar']
+[INFO] fetching ICS: Primary (https://outlook.office365.com/owa/...)
+[INFO] calendars: 1, total events today: 5
+[INFO] Resend sent id=abc-123 subject='Show: calendar — sat may 14 2:00 pm'
 ```
 
 ### Modifying behaviour
 
-Common changes and where to make them:
-
-| Goal                              | File                              | Function or location              |
-| --------------------------------- | --------------------------------- | --------------------------------- |
-| Change digest send times          | `scripts/digest.py`               | `main()`, the `scheduled` line    |
-| Add a new command (e.g. priority) | `scripts/digest.py`               | `parse_commands()`                |
-| Change the visual style           | `templates/email.html`            | The `<style>` block               |
-| Change the confirmation styling   | `scripts/digest.py`               | `send_reply_summary()`            |
-| Change the IMAP search window     | `scripts/digest.py`               | `process_inbox()`, `newer_than`   |
+| Goal                                       | File                  | Where                                    |
+| ------------------------------------------ | --------------------- | ---------------------------------------- |
+| Change digest send times                   | `scripts/digest.py`   | `SCHEDULED_HOURS = {6, 12, 18}`          |
+| Add a new command verb                     | `scripts/parser.py`   | extend `VERBS` + add a handler           |
+| Add a new section to the digest            | `templates/email.html`+ `scripts/digest.py` | `_build_context` / `_full_sections` |
+| Change due-color thresholds                | `scripts/render.py`   | `_color_for_days`                        |
+| Change weather cache lifetime              | `scripts/fetchers.py` | `db.weather_cache_get_fresh(...)` arg    |
+| Change quote retention                     | `scripts/fetchers.py` | `fetch_quote`                            |
+| Change IMAP search window                  | `scripts/imap_inbox.py` | the `newer_than:Nd` literal in `query` |
 
 ## Troubleshooting
 

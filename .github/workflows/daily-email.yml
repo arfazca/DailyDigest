@@ -29,5 +29,9 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ICS_URL: ${{ secrets.ICS_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+          BIRTHDATE: ${{ secrets.BIRTHDATE }}
+          WEATHER_LAT: ${{ secrets.WEATHER_LAT }}
+          WEATHER_LON: ${{ secrets.WEATHER_LON }}
           TIMEZONE: America/Vancouver
         run: python scripts/digest.py

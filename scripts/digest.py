@@ -1,369 +1,321 @@
 #!/usr/bin/env python3
 
-import email
-import imaplib
+from __future__ import annotations
+
 import os
-import re
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import psycopg2
-import recurring_ical_events
-import requests
-from email_reply_parser import EmailReplyParser
-from icalendar import Calendar
-from jinja2 import Template
-from premailer import transform
-
-GMAIL_USER         = os.environ["GMAIL_USER"]
-GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
-OWNER_EMAIL        = os.environ["OWNER_EMAIL"]
-FROM_EMAIL         = os.environ["FROM_EMAIL"]
-FORWARD_EMAILS     = [e.strip() for e in os.environ.get("FORWARD_EMAILS", "").split(",") if e.strip()]
-RESEND_API_KEY     = os.environ["RESEND_API_KEY"]
-ICS_URL            = os.environ["ICS_URL"]
-DATABASE_URL       = os.environ["DATABASE_URL"]
-TIMEZONE           = os.environ.get("TIMEZONE", "America/Vancouver")
-
-REPO_ROOT     = Path(__file__).resolve().parent.parent
-TEMPLATE_FILE = REPO_ROOT / "templates" / "email.html"
-
-TZ    = ZoneInfo(TIMEZONE)
-NOW   = datetime.now(TZ)
-TODAY = NOW.date()
+import db
+import fetchers
+import imap_inbox
+import parser as cmd_parser
+import render
+import sender
 
 
-def log(msg):
-    print(f"[{datetime.now(TZ).strftime('%H:%M:%S')}] {msg}", flush=True)
+SCHEDULED_HOURS = {6, 12, 18}
 
 
-def read_tasks(conn):
-    with conn.cursor() as cur:
-        cur.execute("SELECT text FROM tasks ORDER BY id")
-        tasks = [row[0] for row in cur.fetchall()]
-    log(f"Read {len(tasks)} task(s): {tasks}")
-    return tasks
+def _now(tz: ZoneInfo) -> datetime:
+    return datetime.now(tz)
 
 
-def write_tasks(conn, tasks):
-    with conn.cursor() as cur:
-        cur.execute("DELETE FROM tasks")
-        if tasks:
-            cur.executemany("INSERT INTO tasks (text) VALUES (%s)", [(t,) for t in tasks])
-    conn.commit()
-    log(f"Wrote {len(tasks)} task(s)")
+def _apply_command(conn, cmd, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    a = cmd.action
+    p = cmd.payload
 
+    if a == "add_short":
+        if db.short_task_exists(conn, p["text"]):
+            change_log.append(f"already on short list: {p['text']}")
+            return
+        db.add_short_task(conn, p["text"], p.get("bucket"), p.get("due_at"))
+        suffix = f" #{p['bucket']}" if p.get("bucket") else ""
+        when = f" (due {p['due_at'].strftime('%a %b %-d %-I:%M %p').lower()})" if p.get("due_at") else ""
+        change_log.append(f"added: {p['text']}{suffix}{when}")
+        db.add_pending_change(conn, "add_short", {"text": p["text"]})
+        return
 
-def parse_commands(body: str):
-    clean = EmailReplyParser.parse_reply(body).strip()
-    log(f"  Cleaned body: {clean[:200]!r}")
-    if not clean:
-        return []
+    if a == "add_long":
+        db.add_long_task(conn, p["text"], p["due_date"])
+        change_log.append(f"added long task: {p['text']} (due {p['due_date'].strftime('%a %b %-d, %Y')})")
+        db.add_pending_change(conn, "add_long", {"text": p["text"], "due": p["due_date"].isoformat()})
+        return
 
-    lines = [l.strip() for l in clean.splitlines() if l.strip()]
-    commands = []
+    if a == "add_countdown":
+        db.add_countdown(conn, p["name"], p["target_datetime"])
+        change_log.append(f"countdown set: {p['name']} → {p['target_datetime'].strftime('%a %b %-d, %Y %-I:%M %p').lower()}")
+        db.add_pending_change(conn, "add_countdown", {"name": p["name"]})
+        return
 
-    for line in lines:
-        if line.lower() == "clear":
-            commands.append(("clear", None))
-            continue
-        m = re.match(r"^(add|remove|done|del|delete)\s*:\s*(.+)$", line, re.IGNORECASE)
-        if m:
-            action = m.group(1).lower()
-            if action in ("done", "del", "delete"):
-                action = "remove"
-            commands.append((action, m.group(2).strip()))
+    if a == "add_reflection":
+        expires = cmd_parser.compute_reflection_expiry(p["period"], now)
+        db.add_reflection(conn, p["text"], p["period"], expires)
+        change_log.append(f"reflection set ({p['period']}): {p['text']} — clears {expires.strftime('%a %b %-d, %Y')} 11:59 PM")
+        db.add_pending_change(conn, "add_reflection", {"text": p["text"]})
+        return
 
-    if commands:
-        return commands
+    if a == "add_calendar":
+        db.add_calendar(conn, p["name"], p["url"])
+        change_log.append(f"calendar added: {p['name']}")
+        db.add_pending_change(conn, "add_calendar", {"name": p["name"]})
+        return
 
-    bullets = [re.match(r"^[-*+]\s+(.*)$", l) for l in lines]
-    if len(lines) >= 2 and all(bullets):
-        return [("replace", [b.group(1).strip() for b in bullets])]
-
-    return [("unknown", clean[:300])]
-
-
-def get_text_body(msg) -> str:
-    if msg.is_multipart():
-        for part in msg.walk():
-            if part.get_content_type() == "text/plain" and not part.get_filename():
-                return part.get_payload(decode=True).decode(
-                    part.get_content_charset() or "utf-8", errors="replace"
-                )
-        for part in msg.walk():
-            if part.get_content_type() == "text/html" and not part.get_filename():
-                html = part.get_payload(decode=True).decode(
-                    part.get_content_charset() or "utf-8", errors="replace"
-                )
-                return re.sub(r"<[^>]+>", "", html)
-        return ""
-    return msg.get_payload(decode=True).decode(
-        msg.get_content_charset() or "utf-8", errors="replace"
-    )
-
-
-def process_inbox(conn):
-    log(f"Connecting to IMAP as {GMAIL_USER}")
-    M = imaplib.IMAP4_SSL("imap.gmail.com")
-    M.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-    status, _ = M.select('"[Gmail]/All Mail"', readonly=False)
-    log(f"All Mail select: {status}")
-
-    search_query = f'"deliveredto:{FROM_EMAIL} newer_than:2d"'
-    log(f"IMAP search: X-GM-RAW {search_query}")
-    typ, data = M.search(None, "X-GM-RAW", search_query)
-    msg_ids = data[0].split()
-    log(f"Found {len(msg_ids)} message(s) delivered to {FROM_EMAIL}")
-
-    tasks        = read_tasks(conn)
-    successes    = []
-    not_found    = []
-    unknowns     = []
-
-    for msg_id in msg_ids:
-        typ, msg_data = M.fetch(msg_id, "(RFC822 FLAGS)")
-        flags = imaplib.ParseFlags(msg_data[0][0])
-        log(f"  Message {msg_id.decode()} flags: {flags}")
-
-        if b"\\Seen" in flags:
-            log("  Skipping - already processed")
-            continue
-
-        msg      = email.message_from_bytes(msg_data[0][1])
-        subject  = msg.get("Subject", "")
-        sender   = msg.get("From", "")
-        log(f"  From: {sender!r} Subject: {subject!r}")
-        body     = get_text_body(msg)
-        commands = parse_commands(body)
-        log(f"  Commands: {commands}")
-
-        for action, payload in commands:
-            if action == "add":
-                if payload.lower() in [t.lower() for t in tasks]:
-                    log(f"  Duplicate ignored: '{payload}'")
-                else:
-                    tasks.append(payload)
-                    successes.append(f"Added: {payload}")
-            elif action == "remove":
-                target = payload.lower()
-                before = len(tasks)
-                tasks  = [t for t in tasks if target not in t.lower()]
-                if len(tasks) < before:
-                    successes.append(f"Removed: {payload}")
-                else:
-                    log(f"  Not found: '{payload}'")
-                    not_found.append(payload)
-            elif action == "clear":
-                tasks = []
-                successes.append("Cleared all tasks")
-            elif action == "replace":
-                tasks = payload
-                successes.append(f"Replaced list ({len(payload)} item{'s' if len(payload) != 1 else ''})")
-            elif action == "unknown":
-                log(f"  Unrecognised: {payload!r}")
-                unknowns.append(payload)
-
-        M.store(msg_id, "+FLAGS", "\\Seen")
-
-    M.close()
-    M.logout()
-
-    if successes:
-        write_tasks(conn, tasks)
-        log(f"Changes: {successes}")
-
-    return tasks, successes, not_found, unknowns
-
-
-def fetch_events():
-    log("Fetching ICS feed")
-    try:
-        r = requests.get(ICS_URL, timeout=30)
-        log(f"ICS: HTTP {r.status_code}, {len(r.content)} bytes")
-        r.raise_for_status()
-    except Exception as e:
-        log(f"ERROR fetching ICS: {e}")
-        return []
-
-    cal         = Calendar.from_ical(r.content)
-    today_start = datetime.combine(TODAY, datetime.min.time(), tzinfo=TZ)
-    today_end   = today_start + timedelta(days=1)
-
-    raw_events = recurring_ical_events.of(cal).between(today_start, today_end)
-    log(f"Found {len(raw_events)} raw event(s)")
-
-    events = []
-    for component in raw_events:
-        dtstart = component.get("dtstart")
-        if not dtstart:
-            continue
-        start = dtstart.dt
-        if hasattr(start, "tzinfo"):
-            if start.tzinfo is None:
-                start = start.replace(tzinfo=TZ)
-            start_local = start.astimezone(TZ)
-            is_all_day  = False
+    if a == "done_short":
+        row = db.remove_short_task(conn, p["match"])
+        if row:
+            change_log.append(f"removed: {row['text']}")
+            db.add_pending_change(conn, "done_short", {"text": row["text"]})
         else:
-            start_local = datetime.combine(start, datetime.min.time(), tzinfo=TZ)
-            is_all_day  = True
+            not_found.append(p["match"])
+        return
 
-        if not is_all_day and start_local < NOW:
-            log(f"  Skipping past event: {component.get('summary')} at {start_local}")
-            continue
+    if a == "done_long":
+        row = db.remove_long_task(conn, p["match"])
+        if row:
+            change_log.append(f"removed long task: {row['text']}")
+            db.add_pending_change(conn, "done_long", {"text": row["text"]})
+        else:
+            not_found.append(p["match"])
+        return
 
-        title    = str(component.get("summary", "(no title)"))
-        time_str = "All day" if is_all_day else start_local.strftime("%-I:%M %p").lower()
-        log(f"  {time_str} - {title}")
-        events.append({"time": time_str, "title": title, "_sort": start_local})
+    if a == "done_countdown":
+        row = db.remove_countdown(conn, p["match"])
+        if row:
+            change_log.append(f"removed countdown: {row['name']}")
+        else:
+            not_found.append(p["match"])
+        return
 
-    events.sort(key=lambda e: (e["time"] == "All day", e["_sort"]))
-    log(f"{len(events)} upcoming event(s) after filtering past ones")
-    return events
+    if a == "done_reflection":
+        row = db.remove_reflection(conn, p["match"])
+        if row:
+            change_log.append(f"removed reflection: {row['text']}")
+        else:
+            not_found.append(p["match"])
+        return
+
+    if a == "done_calendar":
+        n = db.remove_calendar_by_name(conn, p["name"])
+        if n:
+            change_log.append(f"removed calendar: {p['name']}")
+        else:
+            not_found.append(p["name"])
+        return
+
+    if a == "show_countdown":
+        return
 
 
-def _resend(subject: str, html: str):
-    payload = {
-        "from": FROM_EMAIL,
-        "to": [OWNER_EMAIL],
-        "reply_to": FROM_EMAIL,
-        "subject": subject,
-        "html": html,
+def _collect_inbox(conn, tz: ZoneInfo, now: datetime):
+    msgs = imap_inbox.read_unprocessed(conn)
+
+    commands_all = []
+    show_full = False
+    show_partials: set[str] = set()
+    unknowns: list[tuple[str, str, str]] = []
+    countdown_requested_name: str | None = None
+    has_keyword_lines = False
+
+    for m in msgs:
+        pr = cmd_parser.parse_email(m["body"], tz)
+        if pr.has_keyword_lines:
+            has_keyword_lines = True
+        if pr.show_full:
+            show_full = True
+        show_partials |= pr.show_partials
+        commands_all.extend([(m, c) for c in pr.commands])
+        for line, reason in pr.unknowns:
+            unknowns.append((m["subject"], line, reason))
+        for c in pr.commands:
+            if c.action == "show_countdown" and c.payload.get("name"):
+                countdown_requested_name = c.payload["name"]
+
+    change_log: list[str] = []
+    not_found: list[str] = []
+    for m, c in commands_all:
+        try:
+            _apply_command(conn, c, now, change_log, not_found)
+        except Exception as exc:
+            db.log(conn, "ERROR", f"command {c.action} failed: {exc}")
+            unknowns.append((m["subject"], c.raw_line, f"internal error: {exc}"))
+
+    for m in msgs:
+        db.mark_email_processed(
+            conn,
+            m["gmail_id"],
+            m["subject"],
+            sum(1 for mm, _ in commands_all if mm["gmail_id"] == m["gmail_id"]),
+            sum(1 for s, _, _ in unknowns if s == m["subject"]),
+        )
+
+    return {
+        "show_full": show_full,
+        "show_partials": show_partials,
+        "change_log": change_log,
+        "not_found": not_found,
+        "unknowns": unknowns,
+        "countdown_requested_name": countdown_requested_name,
+        "has_keyword_lines": has_keyword_lines,
+        "n_messages": len(msgs),
     }
-    if FORWARD_EMAILS:
-        payload["bcc"] = FORWARD_EMAILS
-    r = requests.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-        json=payload,
-        timeout=30,
-    )
-    r.raise_for_status()
-    log(f"Sent (id: {r.json().get('id')})")
 
 
-def send_digest(events, tasks):
-    template = Template(TEMPLATE_FILE.read_text())
-    rendered = template.render(
-        weekday=NOW.strftime("%A"),
-        date_long=NOW.strftime("%B %-d, %Y"),
-        events=events,
-        tasks=tasks,
-    )
-    html    = transform(rendered)
-    subject = f"Daily digest - {NOW.strftime('%a %b %-d')}"
-    log(f"Sending digest to {OWNER_EMAIL}")
-    _resend(subject, html)
+def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox: dict) -> dict:
+    today = now.date()
+    profile = db.get_profile(conn)
+
+    ctx: dict = {
+        "weekday": now.strftime("%A"),
+        "date_long": now.strftime("%B %-d, %Y"),
+        "now_label": now.strftime("%-I:%M %p").lower(),
+        "today_iso": today.isoformat(),
+        "sections": sections,
+        "change_log": inbox["change_log"],
+        "not_found": inbox["not_found"],
+        "unknowns": inbox["unknowns"],
+    }
+
+    if "age" in sections and profile.get("birthdate"):
+        ctx["age"] = render.age_block(profile["birthdate"], today)
+
+    if "weather" in sections or "timetable" in sections:
+        if profile.get("weather_lat") and profile.get("weather_lon"):
+            w = fetchers.fetch_weather(conn, float(profile["weather_lat"]), float(profile["weather_lon"]), tz, now)
+            ctx["weather"] = render.shape_weather(w)
+
+    if "calendar" in sections or "timetable" in sections or "due" in sections:
+        events = fetchers.fetch_all_calendars(conn, tz, now)
+        ctx["events"] = events
+        ctx["timeline"] = render.shape_timeline(events, now)
+
+    if "short" in sections or "grocery" in sections:
+        ctx["short_tasks"] = render.shape_short_tasks(db.short_tasks(conn))
+
+    if "long" in sections:
+        ctx["long_tasks"] = render.shape_long_tasks(db.long_tasks(conn), today)
+
+    if "due" in sections:
+        events_for_due = ctx.get("events") or []
+        ctx["dues"] = render.build_dues(db.long_tasks(conn), db.short_tasks(conn), events_for_due, today)
+
+    if "countdown" in sections or "countdowns" in sections:
+        single = inbox.get("countdown_requested_name") if "countdown" in sections and "countdowns" not in sections else None
+        ctx["countdowns"] = render.shape_countdowns(db.countdowns(conn), now, single)
+
+    if "reflection" in sections:
+        ctx["reflections"] = render.shape_reflections(db.reflections(conn))
+
+    if "quote" in sections:
+        ctx["quote"] = fetchers.fetch_quote(conn, today)
+
+    return ctx
 
 
-def _row(text):
-    return (
-        f'<div style="padding:9px 0;font-size:15px;color:#2a2a2a;'
-        f'border-bottom:1px solid #f3efe7;">{text}</div>'
-    )
+def _full_sections(now: datetime) -> set[str]:
+    s = {"calendar", "weather", "short", "long", "due", "countdowns", "reflection", "quote"}
+    if now.hour == 6:
+        s.add("age")
+    return s
 
 
-def send_reply_summary(successes, not_found, unknowns, tasks):
-    success_html   = "".join(_row(s) for s in successes)
-    not_found_html = "".join(
-        _row(f'&#10007; &nbsp;<span style="color:#888;">{t}</span> - not in list')
-        for t in not_found
-    )
-    unknown_html = "".join(
-        f'<div style="padding:8px 12px;background:#f5f1ea;border-radius:6px;'
-        f'font-family:monospace;font-size:13px;color:#5a5550;margin-bottom:8px;">{u}</div>'
-        for u in unknowns
-    )
+def _decide_email(now: datetime, inbox: dict) -> tuple[str | None, set[str]]:
+    scheduled = now.hour in SCHEDULED_HOURS
+    has_changes = bool(inbox["change_log"] or inbox["not_found"])
+    has_unknowns = bool(inbox["unknowns"])
+    show_full = inbox["show_full"]
+    partials = inbox["show_partials"]
 
-    task_rows = (
-        "".join(
-            '<div style="padding:9px 0;font-size:15px;color:#2a2a2a;border-bottom:1px solid #f3efe7;">'
-            '<span style="color:#b85c2b;font-weight:700;margin-right:10px;">&#9675;</span>'
-            + t + "</div>"
-            for t in tasks
-        )
-        if tasks else
-        '<p style="color:#b5b0a5;font-style:italic;font-size:14px;margin:0;">Your list is empty.</p>'
-    )
+    if show_full or scheduled:
+        s = _full_sections(now)
+        return ("digest", s)
 
-    changes_section = ""
-    if successes or not_found:
-        changes_section = (
-            "<div style='padding:22px 32px;border-bottom:1px solid #ece7df;'>"
-            "<p style='font-size:11px;color:#8a8579;text-transform:uppercase;letter-spacing:1.8px;"
-            "font-weight:700;margin:0 0 12px;'>What changed</p>"
-            + success_html + not_found_html +
-            "</div>"
-        )
+    if partials:
+        s: set[str] = set()
+        for p in partials:
+            if p == "timetable":
+                s.update({"calendar", "weather"})
+            elif p == "countdowns":
+                s.add("countdowns")
+            else:
+                s.add(p)
+        if has_changes:
+            s.add("changes_banner")
+        return ("partial", s)
 
-    unknown_section = ""
-    if unknowns:
-        unknown_section = (
-            "<div style='padding:22px 32px;border-bottom:1px solid #ece7df;background:#fffaf7;'>"
-            "<p style='font-size:11px;color:#8a8579;text-transform:uppercase;letter-spacing:1.8px;"
-            "font-weight:700;margin:0 0 12px;'>Could not parse</p>"
-            "<p style='font-size:14px;color:#5a5550;margin:0 0 12px;'>"
-            "These lines were not recognised as commands:</p>"
-            + unknown_html +
-            "<p style='font-size:12px;color:#8a8579;margin:12px 0 0;'>"
-            "Valid: <code style='background:#ece7df;padding:2px 6px;border-radius:4px;'>add: X</code> &nbsp;"
-            "<code style='background:#ece7df;padding:2px 6px;border-radius:4px;'>done: X</code> &nbsp;"
-            "<code style='background:#ece7df;padding:2px 6px;border-radius:4px;'>clear</code>"
-            "</p></div>"
-        )
+    if has_changes:
+        return ("update", {"calendar", "weather", "changes_banner"})
 
-    header_text = "Got it &#10003;" if successes else "Noted"
-    html = (
-        "<!DOCTYPE html><html><head><meta charset='UTF-8'/></head>"
-        "<body style='margin:0;padding:24px 12px;background:#f5f1ea;"
-        "font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;'>"
-        "<div style='max-width:560px;margin:0 auto;background:#fff;border-radius:12px;"
-        "overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);'>"
-        "<div style='background:#2d6a4f;padding:22px 32px;'>"
-        "<p style='margin:0;font-size:12px;color:#95d5b2;text-transform:uppercase;"
-        "letter-spacing:1.8px;font-weight:700;'>Tasks updated</p>"
-        f"<p style='margin:6px 0 0;font-size:22px;font-weight:700;color:#fff;'>{header_text}</p>"
-        "</div>"
-        + changes_section + unknown_section +
-        "<div style='padding:22px 32px;'>"
-        "<p style='font-size:11px;color:#8a8579;text-transform:uppercase;letter-spacing:1.8px;"
-        "font-weight:700;margin:0 0 12px;'>Your list now</p>"
-        + task_rows +
-        "</div>"
-        "<div style='padding:16px 32px 20px;background:#faf8f3;font-size:12px;"
-        "color:#8a8579;line-height:1.6;'>"
-        "You will get the full digest with your calendar at 6 AM, 12 PM, and 6 PM."
-        "</div></div></body></html>"
-    )
+    if has_unknowns or inbox["has_keyword_lines"]:
+        return ("errors_only", set())
 
-    n       = len(successes)
-    subject = f"Tasks updated - {n} change{'s' if n != 1 else ''}" if successes else "Task reply received"
-    log(f"Sending reply summary to {OWNER_EMAIL}")
-    _resend(subject, html)
+    return (None, set())
 
 
-def main():
-    log("=== Daily Digest starting ===")
-    log(f"Local time: {NOW.strftime('%Y-%m-%d %H:%M %Z')}")
+def _subject_for(kind: str, now: datetime, inbox: dict) -> str:
+    when = now.strftime("%a %b %-d %-I:%M %p").lower()
+    if kind == "digest":
+        return f"Daily digest — {now.strftime('%a %b %-d')}"
+    if kind == "partial":
+        labels = sorted(inbox["show_partials"])
+        return f"Show: {', '.join(labels)} — {when}"
+    if kind == "update":
+        n = len(inbox["change_log"])
+        return f"Tasks updated — {n} change{'s' if n != 1 else ''}"
+    if kind == "errors_only":
+        return f"Could not parse {len(inbox['unknowns'])} line(s)"
+    return f"DailyDigest — {when}"
 
-    conn = psycopg2.connect(DATABASE_URL)
+
+def main() -> None:
+    tz = ZoneInfo(os.environ.get("TIMEZONE") or "America/Vancouver")
+    now = _now(tz)
+    conn = db.connect()
+
+    db.log(conn, "INFO", f"=== run start {db.RUN_ID} at {now.isoformat()} ===")
+
     try:
-        tasks, successes, not_found, unknowns = process_inbox(conn)
-    finally:
+        db.run_migrations(conn)
+        db.seed_from_env(conn)
+        db.prune_debug_log(conn, days=7)
+        db.prune_old_pending(conn, days=14)
+    except Exception as exc:
+        db.log(conn, "ERROR", f"migrations/seed failed: {exc}")
+        raise
+
+    try:
+        inbox = _collect_inbox(conn, tz, now)
+    except Exception as exc:
+        db.log(conn, "ERROR", f"inbox processing failed: {exc}")
+        inbox = {
+            "show_full": False,
+            "show_partials": set(),
+            "change_log": [],
+            "not_found": [],
+            "unknowns": [],
+            "countdown_requested_name": None,
+            "has_keyword_lines": False,
+            "n_messages": 0,
+        }
+
+    kind, sections = _decide_email(now, inbox)
+    db.log(conn, "INFO", f"decision: kind={kind} sections={sorted(sections)}")
+
+    if kind is None:
+        db.log(conn, "INFO", "nothing to send; exiting")
         conn.close()
+        return
 
-    if successes or not_found or unknowns:
-        send_reply_summary(successes, not_found, unknowns, tasks)
+    ctx = _build_context(conn, tz, now, sections, inbox)
+    html = render.render(sections, ctx)
+    subject = _subject_for(kind, now, inbox)
+    sender.send(conn, subject, html)
 
-    scheduled = NOW.hour in (6, 12, 18)
-    if successes or scheduled:
-        events = fetch_events()
-        send_digest(events, tasks)
-    else:
-        log(f"Hour {NOW.hour} - skipping digest")
+    if kind == "digest" or kind == "update" or (kind == "partial" and inbox["change_log"]):
+        db.mark_pending_changes_notified(conn)
 
-    log("=== Done ===")
+    db.log(conn, "INFO", f"=== run end {db.RUN_ID} ===")
+    conn.close()
 
 
 if __name__ == "__main__":
