@@ -1,0 +1,295 @@
+from __future__ import annotations
+
+import ipaddress
+import os
+from datetime import datetime, timedelta
+from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
+
+import recurring_ical_events
+import requests
+from icalendar import Calendar
+
+import db
+
+
+DUE_EVENT_RX = "due"
+SHORT_DURATION_SECONDS = 120
+
+
+def _is_safe_ics_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme != "https":
+            return False
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            return False
+        if hostname in ("localhost", "localhost.localdomain"):
+            return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False
+        except ValueError:
+            pass
+        return True
+    except Exception:
+        return False
+
+
+def _ical_dt_to_local(dt_val, tz: ZoneInfo) -> tuple[datetime, bool]:
+    if hasattr(dt_val, "tzinfo"):
+        if dt_val.tzinfo is None:
+            dt_val = dt_val.replace(tzinfo=tz)
+        return dt_val.astimezone(tz), False
+    return datetime.combine(dt_val, datetime.min.time(), tzinfo=tz), True
+
+
+def _ical_end_to_local(dt_prop, tz: ZoneInfo) -> datetime | None:
+    if dt_prop is None:
+        return None
+    e = dt_prop.dt
+    if hasattr(e, "tzinfo"):
+        if e.tzinfo is None:
+            e = e.replace(tzinfo=tz)
+        return e.astimezone(tz)
+    return datetime.combine(e, datetime.min.time(), tzinfo=tz)
+
+
+def fetch_calendar_events(calendar_row: dict, start: datetime, end: datetime, tz: ZoneInfo, conn) -> list[dict]:
+    cid = calendar_row["id"]
+    name = calendar_row["name"]
+    url = calendar_row["ics_url"]
+    if not _is_safe_ics_url(url):
+        db.log(conn, "WARN", f"calendar {name}: skipped non-https or private URL")
+        return []
+    db.log(conn, "INFO", f"fetching ICS: {name} ({url[:80]})")
+    try:
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+    except Exception as exc:
+        db.log(conn, "ERROR", f"ICS fetch failed for {name}: {exc}")
+        return []
+
+    try:
+        cal = Calendar.from_ical(r.content)
+    except Exception as exc:
+        db.log(conn, "ERROR", f"ICS parse failed for {name}: {exc}")
+        return []
+
+    try:
+        raw_events = recurring_ical_events.of(cal).between(start, end)
+    except Exception as exc:
+        db.log(conn, "ERROR", f"ICS expand failed for {name}: {exc}")
+        return []
+
+    out: list[dict] = []
+    for component in raw_events:
+        dtstart = component.get("dtstart")
+        if not dtstart:
+            continue
+        start_local, is_all_day = _ical_dt_to_local(dtstart.dt, tz)
+        end_local = _ical_end_to_local(component.get("dtend"), tz)
+        title = str(component.get("summary", "(no title)"))
+        uid = str(component.get("uid", ""))
+        duration = (end_local - start_local).total_seconds() if end_local else None
+        is_due = DUE_EVENT_RX in title.lower() or (duration is not None and duration <= SHORT_DURATION_SECONDS)
+        out.append({
+            "calendar_id": cid,
+            "calendar_name": name,
+            "uid": uid,
+            "summary": title,
+            "dtstart": start_local,
+            "dtend": end_local,
+            "is_all_day": is_all_day,
+            "is_due": is_due,
+        })
+
+    try:
+        db.replace_events_cache(conn, cid, [
+            {"uid": r["uid"], "summary": r["summary"], "dtstart": r["dtstart"],
+             "dtend": r["dtend"], "is_all_day": r["is_all_day"]}
+            for r in out
+        ])
+    except Exception as exc:
+        db.log(conn, "WARN", f"events_cache write failed for {name}: {exc}")
+
+    return out
+
+
+def fetch_all_calendars(conn, tz: ZoneInfo, now: datetime) -> list[dict]:
+    start = datetime.combine(now.date(), datetime.min.time(), tzinfo=tz)
+    end = start + timedelta(days=1)
+    cals = db.list_calendars(conn, only_enabled=True)
+    all_events: list[dict] = []
+    for c in cals:
+        all_events.extend(fetch_calendar_events(c, start, end, tz, conn))
+    all_events.sort(key=lambda e: (not e["is_all_day"], e["dtstart"]))
+    db.log(conn, "INFO", f"calendars: {len(cals)}, total events today: {len(all_events)}")
+    return all_events
+
+
+def _fetch_raw_weather(conn, lat: float, lon: float, api_key: str) -> dict | None:
+    try:
+        r = requests.get(
+            "https://api.openweathermap.org/data/3.0/onecall",
+            params={"lat": lat, "lon": lon, "exclude": "minutely,daily,alerts", "units": "metric", "appid": api_key},
+            timeout=30,
+        )
+        if r.status_code == 401:
+            db.log(conn, "WARN", f"OneCall 3.0 401: {r.text[:300]}")
+            r = requests.get(
+                "https://api.openweathermap.org/data/2.5/forecast",
+                params={"lat": lat, "lon": lon, "units": "metric", "appid": api_key},
+                timeout=30,
+            )
+            if r.status_code == 401:
+                db.log(conn, "WARN", f"2.5/forecast 401: {r.text[:300]}")
+                probe = requests.get(
+                    "https://api.openweathermap.org/data/2.5/weather",
+                    params={"lat": lat, "lon": lon, "appid": api_key},
+                    timeout=15,
+                )
+                db.log(conn, "WARN", f"2.5/weather probe status={probe.status_code} body={probe.text[:200]}")
+                return None
+        r.raise_for_status()
+        payload = r.json()
+        db.weather_cache_put(conn, payload)
+        return payload
+    except Exception as exc:
+        db.log(conn, "ERROR", f"weather fetch failed: {exc}")
+        return None
+
+
+def _extract_hourly_entry(h: dict, is_forecast_list: bool) -> dict:
+    weather0 = (h.get("weather") or [{}])[0]
+    if is_forecast_list:
+        main = h.get("main") or {}
+        temp = round(main.get("temp", 0))
+        feels_like = round(main.get("feels_like", 0))
+    else:
+        temp = round(h.get("temp", 0))
+        feels_like = round(h.get("feels_like", 0))
+    return {
+        "temp": temp,
+        "feels_like": feels_like,
+        "summary": weather0.get("main", ""),
+        "description": weather0.get("description", ""),
+        "icon": weather0.get("icon", ""),
+        "pop": round((h.get("pop") or 0) * 100),
+    }
+
+
+def _build_hourly(payload: dict, now: datetime, tz: ZoneInfo, midnight: datetime) -> list[dict]:
+    cutoff = now.replace(minute=0, second=0, microsecond=0)
+    is_forecast_list = "list" in payload
+    entries = payload.get("hourly") or payload.get("list") or []
+    out: list[dict] = []
+    for h in entries:
+        dt = datetime.fromtimestamp(h["dt"], tz=tz)
+        if dt < cutoff or dt >= midnight:
+            continue
+        entry = _extract_hourly_entry(h, is_forecast_list)
+        entry["dt"] = dt
+        out.append(entry)
+    return out
+
+
+def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> dict | None:
+    api_key = os.environ.get("OPENWEATHER_API_KEY")
+    if not api_key:
+        db.log(conn, "WARN", "OPENWEATHER_API_KEY not set; skipping weather")
+        return None
+
+    cached = db.weather_cache_get_fresh(conn, max_age_minutes=360)
+    if cached:
+        db.log(conn, "INFO", f"weather: cache hit (fetched {cached['fetched_at']})")
+        payload = cached["payload"]
+    else:
+        db.log(conn, "INFO", f"weather: fetching (key len={len(api_key)}, lat={lat}, lon={lon})")
+        payload = _fetch_raw_weather(conn, lat, lon, api_key)
+        if payload is None:
+            return None
+
+    midnight = datetime.combine(now.date(), datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+    hourly_out = _build_hourly(payload, now, tz, midnight)
+
+    summary = ""
+    if hourly_out:
+        temps = [h["temp"] for h in hourly_out]
+        mid = sorted(temps)[len(temps) // 2]
+        descs = [h["description"] for h in hourly_out if h["description"]]
+        common = max(set(descs), key=descs.count) if descs else ""
+        if common:
+            summary = f"Mostly {mid}°C, {common}."
+        else:
+            summary = f"Mostly around {mid}°C."
+
+    return {"hourly": hourly_out, "summary": summary}
+
+
+QUOTE_REFRESH_HOUR = 18
+
+
+def _fetch_quote_zen(conn) -> dict | None:
+    try:
+        r = requests.get("https://zenquotes.io/api/random", timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list) and data:
+            text = (data[0].get("q") or "").strip()
+            author = (data[0].get("a") or "").strip()
+            if 10 <= len(text) <= 500:
+                return {"text": text, "author": author, "source": "zenquotes"}
+    except Exception as exc:
+        db.log(conn, "WARN", f"zenquotes failed: {exc}")
+    return None
+
+
+def _fetch_quote_quotable(conn) -> dict | None:
+    try:
+        r = requests.get(
+            "https://api.quotable.io/random",
+            params={"tags": "perseverance|success|wisdom|courage"},
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        text = (data.get("content") or "").strip()
+        author = (data.get("author") or "").strip()
+        if text:
+            return {"text": text, "author": author, "source": "quotable"}
+    except Exception as exc:
+        db.log(conn, "WARN", f"quotable failed: {exc}")
+    return None
+
+
+def fetch_quote(conn, now: datetime) -> dict:
+    today = now.date()
+
+    cached_today = db.quote_cache_get(conn, today)
+    if cached_today:
+        db.log(conn, "INFO", f"quote: today's cache hit ({cached_today['source']})")
+        return cached_today
+
+    most_recent = db.quote_cache_get_recent(conn, max_age_days=30)
+    is_refresh_hour = now.hour == QUOTE_REFRESH_HOUR
+    if most_recent and not is_refresh_hour:
+        db.log(conn, "INFO", f"quote: serving recent ({most_recent['for_date']}); refresh at {QUOTE_REFRESH_HOUR}:00")
+        return most_recent
+
+    db.log(conn, "INFO", "quote: refreshing")
+    fresh = _fetch_quote_zen(conn) or _fetch_quote_quotable(conn)
+    if fresh is None:
+        if most_recent:
+            db.log(conn, "WARN", "quote: both APIs failed; keeping previous cached quote")
+            return most_recent
+        fresh = {
+            "text": "The struggle you're in today is developing the strength you need for tomorrow.",
+            "author": "Robert Tew",
+            "source": "fallback",
+        }
+
+    db.quote_cache_put(conn, today, fresh["text"], fresh["author"], fresh["source"])
+    return fresh
