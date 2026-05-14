@@ -115,7 +115,7 @@ def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> 
         db.log(conn, "WARN", "OPENWEATHER_API_KEY not set; skipping weather")
         return None
 
-    cached = db.weather_cache_get_fresh(conn, max_age_minutes=45)
+    cached = db.weather_cache_get_fresh(conn, max_age_minutes=360)
     if cached:
         db.log(conn, "INFO", f"weather: cache hit (fetched {cached['fetched_at']})")
         payload = cached["payload"]
@@ -197,7 +197,7 @@ def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> 
 
 
 def fetch_quote(conn, today) -> dict:
-    cached = db.quote_cache_get(conn, today)
+    cached = db.quote_cache_get_recent(conn, max_age_days=7)
     if cached:
         return cached
 

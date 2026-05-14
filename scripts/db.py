@@ -476,6 +476,18 @@ def quote_cache_get(conn, for_date: date) -> dict | None:
     return dict(row) if row else None
 
 
+def quote_cache_get_recent(conn, max_age_days: int = 7) -> dict | None:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM quote_cache "
+            "WHERE for_date > CURRENT_DATE - %s::interval "
+            "ORDER BY for_date DESC LIMIT 1",
+            (f"{max_age_days} days",),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def quote_cache_put(conn, for_date: date, text: str, author: str | None, source: str) -> None:
     with conn.cursor() as cur:
         cur.execute(
