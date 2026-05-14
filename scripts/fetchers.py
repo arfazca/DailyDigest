@@ -120,6 +120,10 @@ def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> 
         db.log(conn, "INFO", f"weather: cache hit (fetched {cached['fetched_at']})")
         payload = cached["payload"]
     else:
+        key_len = len(api_key)
+        key_tail = api_key[-4:] if key_len >= 4 else "?"
+        db.log(conn, "INFO", f"weather: fetching (key len={key_len}, tail=...{key_tail}, lat={lat}, lon={lon})")
+        payload = None
         try:
             r = requests.get(
                 "https://api.openweathermap.org/data/3.0/onecall",
@@ -133,12 +137,21 @@ def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> 
                 timeout=30,
             )
             if r.status_code == 401:
-                db.log(conn, "WARN", "OneCall 3.0 401; trying 2.5/forecast")
+                db.log(conn, "WARN", f"OneCall 3.0 401: {r.text[:300]}")
                 r = requests.get(
                     "https://api.openweathermap.org/data/2.5/forecast",
                     params={"lat": lat, "lon": lon, "units": "metric", "appid": api_key},
                     timeout=30,
                 )
+                if r.status_code == 401:
+                    db.log(conn, "WARN", f"2.5/forecast 401: {r.text[:300]}")
+                    probe = requests.get(
+                        "https://api.openweathermap.org/data/2.5/weather",
+                        params={"lat": lat, "lon": lon, "appid": api_key},
+                        timeout=15,
+                    )
+                    db.log(conn, "WARN", f"2.5/weather probe status={probe.status_code} body={probe.text[:200]}")
+                    return None
             r.raise_for_status()
             payload = r.json()
             db.weather_cache_put(conn, payload)
@@ -196,24 +209,25 @@ def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> 
     return {"hourly": hourly_out, "summary": summary}
 
 
-def fetch_quote(conn, today) -> dict:
-    cached = db.quote_cache_get_recent(conn, max_age_days=7)
-    if cached:
-        return cached
+QUOTE_REFRESH_HOUR = 18
 
+
+def _fetch_quote_zen(conn) -> dict | None:
     try:
         r = requests.get("https://zenquotes.io/api/random", timeout=15)
         r.raise_for_status()
         data = r.json()
         if isinstance(data, list) and data:
-            text = data[0].get("q", "").strip()
-            author = data[0].get("a", "").strip()
+            text = (data[0].get("q") or "").strip()
+            author = (data[0].get("a") or "").strip()
             if 10 <= len(text) <= 500:
-                db.quote_cache_put(conn, today, text, author, "zenquotes")
                 return {"text": text, "author": author, "source": "zenquotes"}
     except Exception as exc:
         db.log(conn, "WARN", f"zenquotes failed: {exc}")
+    return None
 
+
+def _fetch_quote_quotable(conn) -> dict | None:
     try:
         r = requests.get(
             "https://api.quotable.io/random",
@@ -225,15 +239,37 @@ def fetch_quote(conn, today) -> dict:
         text = (data.get("content") or "").strip()
         author = (data.get("author") or "").strip()
         if text:
-            db.quote_cache_put(conn, today, text, author, "quotable")
             return {"text": text, "author": author, "source": "quotable"}
     except Exception as exc:
         db.log(conn, "WARN", f"quotable failed: {exc}")
+    return None
 
-    fallback = {
-        "text": "The struggle you’re in today is developing the strength you need for tomorrow.",
-        "author": "Robert Tew",
-        "source": "fallback",
-    }
-    db.quote_cache_put(conn, today, fallback["text"], fallback["author"], fallback["source"])
-    return fallback
+
+def fetch_quote(conn, now: datetime) -> dict:
+    today = now.date()
+
+    cached_today = db.quote_cache_get(conn, today)
+    if cached_today:
+        db.log(conn, "INFO", f"quote: today's cache hit ({cached_today['source']})")
+        return cached_today
+
+    most_recent = db.quote_cache_get_recent(conn, max_age_days=30)
+    is_refresh_hour = now.hour == QUOTE_REFRESH_HOUR
+    if most_recent and not is_refresh_hour:
+        db.log(conn, "INFO", f"quote: serving recent ({most_recent['for_date']}); refresh at {QUOTE_REFRESH_HOUR}:00")
+        return most_recent
+
+    db.log(conn, "INFO", "quote: refreshing")
+    fresh = _fetch_quote_zen(conn) or _fetch_quote_quotable(conn)
+    if fresh is None:
+        if most_recent:
+            db.log(conn, "WARN", "quote: both APIs failed; keeping previous cached quote")
+            return most_recent
+        fresh = {
+            "text": "The struggle you're in today is developing the strength you need for tomorrow.",
+            "author": "Robert Tew",
+            "source": "fallback",
+        }
+
+    db.quote_cache_put(conn, today, fresh["text"], fresh["author"], fresh["source"])
+    return fresh

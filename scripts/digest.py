@@ -207,16 +207,13 @@ def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox:
         ctx["reflections"] = render.shape_reflections(db.reflections(conn))
 
     if "quote" in sections:
-        ctx["quote"] = fetchers.fetch_quote(conn, today)
+        ctx["quote"] = fetchers.fetch_quote(conn, now)
 
     return ctx
 
 
 def _full_sections(now: datetime) -> set[str]:
-    s = {"calendar", "weather", "short", "long", "due", "countdowns", "reflection", "quote"}
-    if now.hour == 6:
-        s.add("age")
-    return s
+    return {"age", "calendar", "weather", "short", "long", "due", "countdowns", "reflection", "quote"}
 
 
 def _decide_email(now: datetime, inbox: dict) -> tuple[str | None, set[str]]:

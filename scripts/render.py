@@ -147,7 +147,7 @@ def shape_weather(weather: dict | None) -> dict | None:
             "temp": h["temp"],
             "summary": h["summary"],
             "description": h["description"],
-            "pop": h["pop"],
+            "precip_pct": h["pop"],
         })
     return {"summary": weather.get("summary", ""), "hourly": hourly}
 
@@ -181,23 +181,36 @@ def shape_long_tasks(rows: list[dict], today: date) -> list[dict]:
     return out
 
 
+def _countdown_label(delta: timedelta) -> str:
+    total = int(delta.total_seconds())
+    if total <= 0:
+        return "REACHED"
+    days = delta.days
+    hours = (total % 86400) // 3600
+    minutes = (total % 3600) // 60
+    if days == 0:
+        return f"{hours}h {minutes}m"
+    years, r = divmod(days, 365)
+    months, r = divmod(r, 30)
+    weeks, r = divmod(r, 7)
+    if years:
+        return f"{years}y {months}mo" if months else f"{years}y"
+    if months:
+        rem = weeks * 7 + r
+        return f"{months}mo {rem}d" if rem else f"{months}mo"
+    if weeks:
+        return f"{weeks}w {r}d" if r else f"{weeks}w"
+    return f"{days}d {hours}h"
+
+
 def shape_countdowns(rows: list[dict], now: datetime, single: str | None = None) -> list[dict]:
     out = []
     for r in rows:
         if single and single.lower() not in r["name"].lower():
             continue
         delta = r["target_datetime"] - now
-        total = delta.total_seconds()
-        if total < 0:
-            label = "REACHED"
-            days = 0
-            hours = 0
-            minutes = 0
-        else:
-            days = delta.days
-            hours = (int(total) // 3600) % 24
-            minutes = (int(total) // 60) % 60
-            label = f"{days}d {hours}h {minutes}m"
+        label = _countdown_label(delta)
+        days = max(0, delta.days)
         out.append({
             "name": r["name"],
             "target": r["target_datetime"].strftime("%a %b %-d, %Y %-I:%M %p").lower(),

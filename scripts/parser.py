@@ -205,7 +205,7 @@ def _parse_add(rest: str, tz: ZoneInfo) -> Command | tuple[None, str]:
             tail_words = re.sub(r'"[^"]*"|\'[^\']*\'', "", rest)
             _, due_part = _split_on_due(tail_words)
         if not due_part:
-            return None, 'add long task: missing "due <date>"'
+            return None, 'add long task: missing due date — e.g. due 15 august 2026'
         due = _parse_datetime(due_part, tz)
         if not due:
             return None, f"add long task: could not parse date {due_part!r}"

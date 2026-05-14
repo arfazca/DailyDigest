@@ -195,7 +195,7 @@
               <div class="weather-time">{{ h.time }}</div>
               <div class="weather-temp">{{ h.temp }}°C</div>
               <div class="weather-desc">{{ h.description }}</div>
-              <div class="weather-pop">{% if h.pop %}{{ h.pop }}%{% endif %}</div>
+              <div class="weather-pop">{% if h.precip_pct %}{{ h.precip_pct }}%{% endif %}</div>
             </div>
           {% endfor %}
         {% else %}
