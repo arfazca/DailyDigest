@@ -68,7 +68,7 @@ VALUES ('submit timesheet', '2026-05-16 17:00 America/Vancouver');
 DELETE FROM tasks_short WHERE text ILIKE '%detergent%';
 ```
 
-`bucket` is free-text. Only `grocery` is wired up to the dedicated `show grocery` partial today, but any bucket name appears in the rendered "<name> bucket" sub-section of the short task list.
+`bucket` is free-text. Only `grocery` is wired up to the dedicated `show grocery` partial today, but any bucket name appears in the rendered "(name) bucket" sub-section of the short task list.
 
 ## Long tasks
 

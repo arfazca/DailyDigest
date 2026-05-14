@@ -27,7 +27,7 @@ cron-job.org sends an HTTP POST to GitHub's workflow dispatch API every hour. Gi
 ### Common tab
 
 | Field | Value |
-|---|---|
+| --- | --- |
 | Title | Daily Digest |
 | URL | `https://api.github.com/repos/YOUR_GITHUB_USERNAME/DailyDigest/actions/workflows/daily-email.yml/dispatches` |
 | Schedule | Every hour at :00 |
@@ -39,19 +39,20 @@ Replace `YOUR_GITHUB_USERNAME` with your actual GitHub username.
 **Request method:** POST
 
 **Request body:**
-```
+
+```json
 {"ref":"main"}
 ```
 
 **Headers** (click + ADD for each):
 
 | Key | Value |
-|---|---|
+| --- | --- |
 | `Authorization` | `Bearer github_pat_YOUR_TOKEN_HERE` |
 | `Content-Type` | `application/json` |
 | `Accept` | `application/vnd.github.v3+json` |
 
-The `Bearer ` prefix with a space is required. The full value should be `Bearer github_pat_...`.
+The `Bearer` prefix followed by a space is required. The full value should be `Bearer github_pat_...`.
 
 **Time zone:** America/Los_Angeles
 
@@ -70,7 +71,7 @@ After the test, check github.com/YOUR_USERNAME/DailyDigest/actions to confirm a 
 
 ## Troubleshooting
 
-**401 Unauthorized** - The Authorization header value is wrong. Make sure it starts with `Bearer ` (with a space) before the token.
+**401 Unauthorized** - The Authorization header value is wrong. Make sure it starts with `Bearer` followed by a space before the token.
 
 **404 Not Found** - The token doesn't have permission or the URL is wrong. Double-check the repo name in the URL matches exactly, and that the token has Actions: Read and write on that specific repo.
 

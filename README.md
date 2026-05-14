@@ -34,18 +34,18 @@ The entire system runs on free tiers: a Python script in GitHub Actions, an HTTP
 
 ## Stack
 
-| Component       | Service                    | Purpose                                                          |
-| --------------- | -------------------------- | ---------------------------------------------------------------- |
-| Runtime         | GitHub Actions (Ubuntu)    | Executes the Python script on demand                             |
-| Scheduler       | cron-job.org               | Triggers the workflow on the hour, every hour                    |
-| Language        | Python 3.12                | Script logic                                                     |
-| Inbound mail    | ImprovMX                   | Forwards `*@yourdomain.tld` to a Gmail inbox                     |
-| Outbound mail   | Resend                     | Sends transactional email from your verified domain              |
-| Reply storage   | Gmail (IMAP)               | Holds incoming task commands until the script reads them         |
-| Calendar source | Any ICS feed (multiple)    | Outlook, Google, iCloud, etc.; add with `add calendar "..." URL` |
-| Weather         | OpenWeather One Call 3.0   | Hourly forecast (free tier: 1k calls/day)                        |
-| Quotes          | ZenQuotes with Quotable fallback | Daily quote, cached in DB                                   |
-| State           | Neon (PostgreSQL)          | Tasks, long tasks, countdowns, reflections, profile, debug log   |
+| Component | Service | Purpose |
+| --- | --- | --- |
+| Runtime | GitHub Actions (Ubuntu) | Executes the Python script on demand |
+| Scheduler | cron-job.org | Triggers the workflow on the hour, every hour |
+| Language | Python 3.12 | Script logic |
+| Inbound mail | ImprovMX | Forwards `*@yourdomain.tld` to a Gmail inbox |
+| Outbound mail | Resend | Sends transactional email from your verified domain |
+| Reply storage | Gmail (IMAP) | Holds incoming task commands until the script reads them |
+| Calendar source | Any ICS feed (multiple) | Outlook, Google, iCloud, etc.; add with `add calendar "..." URL` |
+| Weather | OpenWeather One Call 3.0 | Hourly forecast (free tier: 1k calls/day) |
+| Quotes | ZenQuotes + Quotable | Daily quote, cached in DB |
+| State | Neon (PostgreSQL) | Tasks, long tasks, countdowns, reflections, profile, debug log |
 
 All services have free tiers that comfortably cover the load (one HTTP request per hour, a handful of emails per day).
 
@@ -111,20 +111,20 @@ The published feed refreshes on Outlook's side roughly every few hours. Newly ad
 1. Fork or clone this repository to your GitHub account. Keep it private if you prefer.
 2. Open Settings, then Secrets and variables, then Actions, then New repository secret. Add the following:
 
-| Secret                | Value                                                                       |
-| --------------------- | --------------------------------------------------------------------------- |
-| `GMAIL_USER`          | Your Gmail address, e.g. `you@gmail.com`.                                   |
-| `GMAIL_APP_PASSWORD`  | The 16-character App Password from step 3, no spaces.                       |
-| `OWNER_EMAIL`         | Where the digest is delivered. Usually `morning@yourdomain.tld`.            |
-| `FROM_EMAIL`          | The address the digest sends from, e.g. `morning@yourdomain.tld`.           |
-| `RESEND_API_KEY`      | The API key from step 2.                                                    |
-| `ICS_URL`             | Your first ICS feed. Used to seed the `calendars` table on first run. Additional calendars are added later via `add calendar "Name" URL`. |
-| `DATABASE_URL`        | The Neon connection string (PostgreSQL). Found in your Neon project dashboard. |
-| `OPENWEATHER_API_KEY` | OpenWeather One Call 3.0 key. Sign up at [openweathermap.org](https://openweathermap.org/api/one-call-3). |
-| `WEATHER_LAT`         | Latitude (e.g. `48.42841`). Seeds the `profile` table on first run.         |
-| `WEATHER_LON`         | Longitude (e.g. `-123.36564`). Seeds the `profile` table on first run.      |
-| `BIRTHDATE`           | `YYYY-MM-DD`, e.g. `2002-06-15`. Seeds the `profile` table on first run.    |
-| `FORWARD_EMAILS`      | Optional. Comma-separated extra BCC recipients. Leave blank to skip.        |
+| Secret | Value |
+| --- | --- |
+| `GMAIL_USER` | Your Gmail address, e.g. `you@gmail.com`. |
+| `GMAIL_APP_PASSWORD` | The 16-character App Password from step 3, no spaces. |
+| `OWNER_EMAIL` | Where the digest is delivered. Usually `morning@yourdomain.tld`. |
+| `FROM_EMAIL` | The address the digest sends from, e.g. `morning@yourdomain.tld`. |
+| `RESEND_API_KEY` | The API key from step 2. |
+| `ICS_URL` | First ICS feed URL. Seeds the `calendars` table on first run; add more via `add calendar "Name" URL`. |
+| `DATABASE_URL` | Neon PostgreSQL connection string. Found in your Neon project dashboard. |
+| `OPENWEATHER_API_KEY` | OpenWeather One Call 3.0 API key. Sign up at [openweathermap.org](https://openweathermap.org/api/one-call-3). |
+| `WEATHER_LAT` | Latitude (e.g. `48.42841`). Seeds the `profile` table on first run. |
+| `WEATHER_LON` | Longitude (e.g. `-123.36564`). Seeds the `profile` table on first run. |
+| `BIRTHDATE` | `YYYY-MM-DD`, e.g. `2002-06-15`. Seeds the `profile` table on first run. |
+| `FORWARD_EMAILS` | Optional. Comma-separated extra BCC recipients. Leave blank to skip. |
 
 If `OWNER_EMAIL` and `FROM_EMAIL` are both on your domain (recommended), the digest header shows `to: morning@yourdomain.tld` rather than your raw Gmail address.
 
@@ -166,18 +166,18 @@ Send any email to `morning@yourdomain.tld` from any address. At the next hourly 
 
 ### Commands at a glance
 
-| Goal                          | Example                                                       |
-| ----------------------------- | ------------------------------------------------------------- |
-| Add a short task              | `add "buy detergent"`                                         |
-| Add with a bucket             | `add "milk" #grocery`                                         |
-| Add a long task (due required) | `add long task "M license exam" due 7 october 2027`          |
-| Add a short task with due time | `add "submit timesheet" due friday 5pm`                      |
-| Add a countdown               | `add countdown "graduation" 15 june 2026`                     |
-| Add a reflection              | `add reflection for week "review React patterns"`             |
-| Add another calendar          | `add calendar "Work" https://...ics`                          |
-| Remove anything               | `done "detergent"` · `remove countdown "graduation"`          |
-| Request the full digest now   | `show` / `show everything` / `show current`                   |
-| Request one section           | `show calendar` · `show weather` · `show due` · `show grocery` |
+| Goal | Example |
+| --- | --- |
+| Add a short task | `add "buy detergent"` |
+| Add with a bucket | `add "milk" #grocery` |
+| Add a long task (due required) | `add long task "M license exam" due 7 october 2027` |
+| Add a short task with due time | `add "submit timesheet" due friday 5pm` |
+| Add a countdown | `add countdown "graduation" 15 june 2026` |
+| Add a reflection | `add reflection for week "review React patterns"` |
+| Add another calendar | `add calendar "Work" https://...ics` |
+| Remove anything | `done "detergent"` · `remove countdown "graduation"` |
+| Request the full digest now | `show` / `show everything` / `show current` |
+| Request one section | `show calendar` · `show weather` · `show due` · `show grocery` |
 
 Full reference, all aliases, date formats, and parser rules: [docs/commands.md](docs/commands.md).
 
@@ -289,7 +289,7 @@ You could replace any one of these. The script only depends on Gmail IMAP being 
 
 The script searches `[Gmail]/All Mail` with Gmail's native `X-GM-RAW` syntax:
 
-```
+```text
 deliveredto:morning@yourdomain.tld newer_than:2d
 ```
 
@@ -405,15 +405,15 @@ A run that processes a `show calendar` email at 2 PM logs:
 
 ### Modifying behaviour
 
-| Goal                                       | File                  | Where                                    |
-| ------------------------------------------ | --------------------- | ---------------------------------------- |
-| Change digest send times                   | `scripts/digest.py`   | `SCHEDULED_HOURS = {6, 12, 18}`          |
-| Add a new command verb                     | `scripts/parser.py`   | extend `VERBS` + add a handler           |
-| Add a new section to the digest            | `templates/email.html`+ `scripts/digest.py` | `_build_context` / `_full_sections` |
-| Change due-color thresholds                | `scripts/render.py`   | `_color_for_days`                        |
-| Change weather cache lifetime              | `scripts/fetchers.py` | `db.weather_cache_get_fresh(...)` arg    |
-| Change quote retention                     | `scripts/fetchers.py` | `fetch_quote`                            |
-| Change IMAP search window                  | `scripts/imap_inbox.py` | the `newer_than:Nd` literal in `query` |
+| Goal | File | Where |
+| --- | --- | --- |
+| Change digest send times | `scripts/digest.py` | `SCHEDULED_HOURS = {6, 12, 18}` |
+| Add a new command verb | `scripts/parser.py` | extend `VERBS` + add a handler |
+| Add a new section to the digest | `templates/email.html` + `scripts/digest.py` | `_build_context` / `_full_sections` |
+| Change due-color thresholds | `scripts/render.py` | `_color_for_days` |
+| Change weather cache lifetime | `scripts/fetchers.py` | `db.weather_cache_get_fresh(...)` arg |
+| Change quote retention | `scripts/fetchers.py` | `fetch_quote` |
+| Change IMAP search window | `scripts/imap_inbox.py` | the `newer_than:Nd` literal in `query` |
 
 ## Troubleshooting
 
