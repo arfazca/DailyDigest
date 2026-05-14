@@ -210,6 +210,10 @@ def log(conn, level: str, message: str) -> None:
         conn.commit()
     except Exception as exc:
         print(f"[WARN] debug_log insert failed: {exc}", flush=True)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
 
 
 def prune_debug_log(conn, days: int = 7) -> None:
