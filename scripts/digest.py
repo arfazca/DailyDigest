@@ -243,6 +243,13 @@ def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox:
     if "reflection" in sections:
         ctx["reflections"] = render.shape_reflections(db.reflections(conn))
 
+    if "completed" in sections:
+        ctx["recent_completed"] = render.shape_recent_completed(
+            db.recent_completed_short(conn, days=3),
+            db.recent_completed_long(conn, days=3),
+            now,
+        )
+
     if "quote" in sections:
         ctx["quote"] = fetchers.fetch_quote(conn, now)
 
@@ -250,7 +257,10 @@ def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox:
 
 
 def _full_sections() -> set[str]:
-    return {"age", "calendar", "weather", "short", "long", "due", "countdowns", "reflection", "quote"}
+    return {
+        "age", "calendar", "weather", "short", "long", "due",
+        "countdowns", "reflection", "completed", "quote",
+    }
 
 
 def _sections_for_partials(partials: set[str]) -> set[str]:
@@ -317,6 +327,7 @@ def main() -> None:
         db.seed_from_env(conn)
         db.prune_debug_log(conn, days=7)
         db.prune_old_pending(conn, days=14)
+        db.prune_completed_tasks(conn, days=30)
     except Exception as exc:
         db.log(conn, "ERROR", f"migrations/seed failed: {exc}")
         raise

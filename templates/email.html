@@ -9,51 +9,63 @@
          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
          color:#2a2a2a; line-height:1.5; }
   sup { font-size:0.72em; line-height:0; vertical-align:super; }
+  a { color:#b85c2b; }
   .container { max-width:620px; margin:0 auto; background:#fff;
-               border-radius:12px; overflow:hidden;
-               box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+               border-radius:14px; overflow:hidden;
+               box-shadow:0 4px 16px rgba(40,30,15,0.06); }
 
-  .header { padding:28px 32px 22px; border-bottom:1px solid #ece7df; }
-  .date-label { font-size:12px; color:#6b6860; text-transform:uppercase;
+  .header { padding:28px 32px 22px;
+            background:linear-gradient(180deg,#fdfaf3 0%,#ffffff 100%);
+            border-bottom:1px solid #ece7df; }
+  .date-label { font-size:12px; color:#8a857a; text-transform:uppercase;
                 letter-spacing:1.8px; margin:0 0 6px; font-weight:600; }
   .date-main { font-size:26px; font-weight:700; color:#1a1a1a; margin:0;
                letter-spacing:-0.5px; }
 
   .section { padding:22px 32px; }
   .section + .section { border-top:1px solid #f3efe7; }
-  .section-title { font-size:11px; color:#6b6860; text-transform:uppercase;
+  .section-title { font-size:11px; color:#8a857a; text-transform:uppercase;
                    letter-spacing:1.8px; margin:0 0 14px; font-weight:700; }
 
-  .age-row { display:flex; gap:16px; margin-top:10px;
-             padding:12px 14px; background:#faf8f3; border-radius:8px; }
-  .age-block { flex:1; }
+  .age-row { margin-top:12px; padding:14px 16px;
+             background:#fbf7ef; border-radius:10px;
+             border-left:3px solid #d9a76b; }
   .age-line { font-size:14px; color:#2a2a2a; margin:0; }
-  .age-sub  { font-size:12px; color:#6b6860; margin:4px 0 0; }
+  .age-sub  { font-size:12px; color:#6b6860; margin:6px 0 0; }
 
-  .due { padding:10px 12px; border-radius:8px; margin-bottom:8px;
-         display:flex; justify-content:space-between; align-items:center;
-         font-size:14px; }
-  .due-green     { background:#e6f4ea; color:#1e6a3a; border-left:4px solid #2d8a4f; }
-  .due-yellow    { background:#fff8d4; color:#7c5a00; border-left:4px solid #d4a843; }
-  .due-orange    { background:#fde7d3; color:#8a4a16; border-left:4px solid #d4742b; }
-  .due-red-orange{ background:#fcd9c7; color:#8a2c0e; border-left:4px solid #c8492b; }
-  .due-red       { background:#f9d2cf; color:#7a1d11; border-left:4px solid #a82420; }
-  .due-overdue   { background:#3a1010; color:#fff; border-left:4px solid #ff5e57; }
-  .due-neutral   { background:#f5f1ea; color:#5a5550; border-left:4px solid #c5c0b3; }
-  .due-label  { font-weight:600; }
-  .due-when   { font-size:12px; opacity:0.8; }
-  .due-src    { font-size:10px; text-transform:uppercase; letter-spacing:1px;
-                margin-left:8px; opacity:0.6; }
+  .due { padding:12px 14px; border-radius:10px; margin-bottom:8px;
+         font-size:14px; border-left:4px solid transparent; }
+  .due-head { line-height:1.4; }
+  .due-label { font-weight:600; }
+  .due-badge { display:inline-block; padding:2px 8px; border-radius:999px;
+               font-size:10px; font-weight:700; letter-spacing:0.8px;
+               text-transform:uppercase; margin-left:8px;
+               vertical-align:middle; white-space:nowrap; }
+  .due-when { font-size:12px; opacity:0.85; margin-top:5px; }
+  .due-green     { background:#e6f4ea; color:#1e6a3a; border-left-color:#2d8a4f; }
+  .due-yellow    { background:#fff8d4; color:#7c5a00; border-left-color:#d4a843; }
+  .due-orange    { background:#fde7d3; color:#8a4a16; border-left-color:#d4742b; }
+  .due-red-orange{ background:#fcd9c7; color:#8a2c0e; border-left-color:#c8492b; }
+  .due-red       { background:#f9d2cf; color:#7a1d11; border-left-color:#a82420; }
+  .due-overdue   { background:#3a1010; color:#fff; border-left-color:#ff5e57; }
+  .due-neutral   { background:#f5f1ea; color:#5a5550; border-left-color:#c5c0b3; }
 
-  .changes { background:#eef7ef; padding:18px 22px; border-radius:8px;
-             margin-bottom:6px; }
+  .badge-short    { background:rgba(58,110,165,0.16); color:#27517a; }
+  .badge-long     { background:rgba(126,90,158,0.18); color:#5a3d80; }
+  .badge-calendar { background:rgba(184,92,43,0.16); color:#8a4316; }
+  .due-overdue .badge-short    { background:rgba(255,255,255,0.18); color:#fff; }
+  .due-overdue .badge-long     { background:rgba(255,255,255,0.18); color:#fff; }
+  .due-overdue .badge-calendar { background:rgba(255,255,255,0.18); color:#fff; }
+
+  .changes { background:#eef7ef; padding:18px 22px; border-radius:10px;
+             margin-bottom:6px; border-left:3px solid #2d8a4f; }
   .changes-title { font-size:11px; color:#2d6a4f; text-transform:uppercase;
                    letter-spacing:1.8px; font-weight:700; margin:0 0 10px; }
   .change-row { padding:5px 0; font-size:14px; color:#1f4a36; }
   .change-row.miss { color:#7a1d11; }
 
-  .errors { background:#fff5f0; padding:18px 22px; border-radius:8px;
-            margin-top:8px; border:1px solid #f0d0c0; }
+  .errors { background:#fff5f0; padding:18px 22px; border-radius:10px;
+            margin-top:8px; border:1px solid #f0d0c0; border-left:3px solid #d4742b; }
   .errors-title { font-size:11px; color:#8a4a16; text-transform:uppercase;
                   letter-spacing:1.8px; font-weight:700; margin:0 0 10px; }
   .err-line { background:#ece7df; padding:6px 10px; border-radius:4px;
@@ -62,16 +74,18 @@
   .err-reason { font-size:12px; color:#8a4a16; margin:0 0 10px 4px; }
 
   .weather-summary { font-size:14px; color:#2a2a2a; margin:0 0 14px; }
-  .weather-row { display:flex; justify-content:space-between; padding:6px 0;
-                 border-bottom:1px solid #f3efe7; font-size:13px; }
+  .weather-row { padding:8px 0; border-bottom:1px solid #f3efe7;
+                 font-size:13px; line-height:1.45; }
   .weather-row:last-child { border-bottom:none; }
-  .weather-time { font-variant-numeric:tabular-nums; color:#6b6860;
-                  width:60px; flex-shrink:0; }
-  .weather-temp { font-weight:700; color:#1a1a1a; width:50px; flex-shrink:0;
-                  text-align:right; }
-  .weather-desc { flex:1; color:#5a5550; padding:0 12px; }
-  .weather-pop  { width:50px; flex-shrink:0; text-align:right; color:#3a6ea5;
-                  font-size:12px; }
+  .weather-time { display:inline-block; font-variant-numeric:tabular-nums;
+                  color:#8a857a; min-width:54px; font-weight:500; }
+  .weather-temp { display:inline-block; font-weight:700; color:#1a1a1a;
+                  min-width:46px; }
+  .weather-desc { color:#4a4540; }
+  .weather-pop  { display:inline-block; margin-left:6px; padding:1px 7px;
+                  border-radius:999px; background:rgba(58,110,165,0.12);
+                  color:#27517a; font-size:11px; font-weight:600;
+                  font-variant-numeric:tabular-nums; }
 
   .event { padding:11px 0; border-bottom:1px solid #f3efe7; }
   .event:last-child { border-bottom:none; padding-bottom:0; }
@@ -81,52 +95,103 @@
   .event-title { font-size:15px; color:#1a1a1a; margin-top:3px; font-weight:500; }
   .event-cal   { font-size:11px; color:#6b6860; margin-top:2px;
                  text-transform:uppercase; letter-spacing:0.8px; }
-  .event.past .event-time { text-decoration:line-through; color:#b5b0a5; }
-  .event.past .event-title { color:#b5b0a5; }
-  .event.past .event-cal { color:#c5c0b3; }
-  .event.due .event-time { color:#a82420; }
+  .event.past .event-time  { text-decoration:line-through; color:#b5b0a5; }
+  .event.past .event-title { text-decoration:line-through; color:#b5b0a5;
+                             font-weight:400; }
+  .event.past .event-cal   { text-decoration:line-through; color:#c5c0b3; }
+  .event.due .event-time   { color:#a82420; }
 
-  .task { padding:9px 0; font-size:15px; color:#1a1a1a;
-          border-bottom:1px solid #f3efe7; }
+  .task { padding:9px 0; font-size:15px; line-height:1.45;
+          color:#1a1a1a; border-bottom:1px solid #f3efe7; }
   .task:last-child { border-bottom:none; padding-bottom:0; }
   .task:first-child { padding-top:0; }
   .bullet { color:#b85c2b; font-weight:700; margin-right:10px; }
-  .task-due { font-size:12px; color:#6b6860; margin-left:8px; }
+  .task-due { display:inline-block; font-size:12px; color:#6b6860;
+              margin-left:8px; padding:1px 8px; border-radius:999px;
+              background:#f5f1ea; }
   .bucket-title { font-size:11px; color:#5a5550; text-transform:uppercase;
                   letter-spacing:1.4px; font-weight:700; margin:14px 0 8px; }
 
-  .long-row { padding:10px 12px; border-radius:6px; margin-bottom:6px;
-              display:flex; justify-content:space-between; font-size:14px; }
-  .long-row .when { font-size:12px; color:#6b6860; }
+  .long-row { padding:11px 14px; border-radius:10px; margin-bottom:6px;
+              font-size:14px; border-left:4px solid transparent; }
+  .long-row strong { font-weight:600; }
+  .long-row .when { display:block; font-size:12px; color:#6b6860;
+                    margin-top:5px; }
 
-  .countdown { padding:10px 12px; background:#faf8f3; border-radius:8px;
-               margin-bottom:8px; display:flex; justify-content:space-between; }
+  .countdown { padding:12px 14px; background:#faf8f3; border-radius:10px;
+               margin-bottom:8px; border-left:3px solid #d9a76b; }
+  .countdown-row { line-height:1.4; }
   .countdown-name { font-weight:600; color:#1a1a1a; font-size:14px; }
-  .countdown-target { font-size:11px; color:#6b6860; }
-  .countdown-label { font-family:'SF Mono',Monaco,Consolas,monospace;
-                     font-size:13px; color:#b85c2b; font-weight:700; }
+  .countdown-target { font-size:11px; color:#6b6860; margin-top:2px; }
+  .countdown-label { display:inline-block; margin-top:6px;
+                     padding:3px 10px; border-radius:999px;
+                     background:#fff; border:1px solid #e8dcc4;
+                     font-family:'SF Mono',Monaco,Consolas,monospace;
+                     font-size:12px; color:#b85c2b; font-weight:700;
+                     letter-spacing:0.4px; }
 
-  .reflection { padding:12px 14px; background:#f4f0e6; border-radius:8px;
-                margin-bottom:8px; }
+  .reflection { padding:12px 14px; background:#f4f0e6; border-radius:10px;
+                margin-bottom:8px; border-left:3px solid #b8a888; }
   .reflection-text { font-size:14px; color:#2a2a2a; margin:0; }
   .reflection-meta { font-size:11px; color:#6b6860; margin:6px 0 0;
                      text-transform:uppercase; letter-spacing:1px; }
 
-  .quote { padding:22px 32px; background:#1a1a1a; color:#f5f1ea; }
-  .quote-text { font-style:italic; font-size:15px; line-height:1.6; margin:0; }
-  .quote-author { font-size:12px; color:#b5b0a5; margin:10px 0 0;
+  .completed-row { padding:8px 0; font-size:14px; line-height:1.45;
+                   border-bottom:1px dashed #ece7df; }
+  .completed-row:last-child { border-bottom:none; padding-bottom:0; }
+  .completed-row:first-child { padding-top:0; }
+  .completed-check { color:#2d8a4f; font-weight:700; margin-right:9px;
+                     font-size:14px; }
+  .completed-text { color:#8a8580; text-decoration:line-through; }
+  .completed-badge { display:inline-block; padding:2px 8px; border-radius:999px;
+                     font-size:10px; font-weight:700; letter-spacing:0.8px;
+                     text-transform:uppercase; margin-left:6px;
+                     vertical-align:middle; white-space:nowrap; }
+  .completed-when { display:inline-block; margin-left:8px; font-size:12px;
+                    color:#9a958a; }
+
+  .quote { padding:24px 32px; background:#1a1a1a; color:#f5f1ea; }
+  .quote-text { font-style:italic; font-size:15px; line-height:1.65; margin:0; }
+  .quote-author { font-size:12px; color:#b5b0a5; margin:12px 0 0;
                   text-transform:uppercase; letter-spacing:1.5px; }
 
   .empty { color:#b5b0a5; font-style:italic; font-size:14px; margin:0; }
 
   .footer { padding:18px 32px 22px; background:#faf8f3; font-size:12px;
-            color:#6b6860; line-height:1.7; }
+            color:#6b6860; line-height:1.7;
+            border-top:1px solid #ece7df; }
   .footer strong { color:#5a5550; display:block; margin-bottom:6px;
                    font-size:11px; text-transform:uppercase;
                    letter-spacing:1.2px; }
   .footer code { background:#ece7df; padding:2px 7px; border-radius:4px;
                  font-family:'SF Mono',Monaco,Consolas,monospace; font-size:11px;
                  color:#5a5550; }
+
+  @media only screen and (max-width: 520px) {
+    body { padding:16px 8px; }
+    .container { border-radius:12px; }
+    .header   { padding:22px 20px 18px; }
+    .section  { padding:18px 20px; }
+    .quote    { padding:22px 20px; }
+    .footer   { padding:16px 20px 20px; }
+    .date-main { font-size:22px; }
+
+    .due-badge { display:inline-block; margin-left:0; margin-top:6px; }
+    .due-label { display:block; }
+
+    .long-row { padding:11px 12px; }
+    .countdown { padding:11px 12px; }
+    .reflection { padding:11px 12px; }
+
+    .task-due { display:block; margin-left:24px; margin-top:6px; }
+
+    .weather-time { min-width:48px; }
+    .weather-temp { min-width:44px; }
+    .weather-pop  { margin-left:0; margin-top:4px; }
+
+    .completed-badge { margin-left:0; margin-top:4px; }
+    .completed-when  { display:block; margin-left:24px; margin-top:3px; }
+  }
 </style>
 </head>
 <body>
@@ -136,10 +201,8 @@
       <h1 class="date-main">{{ date_long }}</h1>
       {% if 'age' in sections and age %}
         <div class="age-row">
-          <div class="age-block">
-            <p class="age-line">You are <strong>{{ age.years }} years, {{ age.months }} months, {{ age.days }} days</strong> old today, {{ age.today_iso }}.</p>
-            <p class="age-sub">{{ age.to_next_months }} months, {{ age.to_next_days }} days away from turning {{ age.next_age }} ({{ age.to_next_total_days }} days total).</p>
-          </div>
+          <p class="age-line">You are <strong>{{ age.years }} years, {{ age.months }} months, {{ age.days }} days</strong> old today, {{ age.today_pretty }}.</p>
+          <p class="age-sub">{{ age.to_next_months }} months, {{ age.to_next_days }} days away from turning {{ age.next_age }} ({{ age.to_next_total_days }} days total).</p>
         </div>
       {% endif %}
     </div>
@@ -149,11 +212,11 @@
         <p class="section-title">Due within 14 days</p>
         {% for d in dues %}
           <div class="due due-{{ d.color }}">
-            <div>
+            <div class="due-head">
               <span class="due-label">{{ d.label }}</span>
-              <span class="due-src">{{ d.source }}</span>
-              <div class="due-when">{{ d.when }} · {{ d.humanized }}</div>
+              <span class="due-badge badge-{{ d.source }}">{{ d.source_label }}</span>
             </div>
+            <div class="due-when">{{ d.when }} · {{ d.humanized }}</div>
           </div>
         {% endfor %}
       </div>
@@ -188,15 +251,14 @@
 
     {% if 'weather' in sections and weather %}
       <div class="section">
-        <p class="section-title">Weather — rest of today</p>
+        <p class="section-title">Weather · rest of today</p>
         <p class="weather-summary">{{ weather.summary }}</p>
         {% if weather.hourly %}
           {% for h in weather.hourly %}
             <div class="weather-row">
-              <div class="weather-time">{{ h.time }}</div>
-              <div class="weather-temp">{{ h.temp }}°C</div>
-              <div class="weather-desc">{{ h.description }}</div>
-              <div class="weather-pop">{% if h.precip_pct %}{{ h.precip_pct }}%{% endif %}</div>
+              <span class="weather-time">{{ h.time }}</span>
+              <span class="weather-temp">{{ h.temp }}°C</span>
+              <span class="weather-desc">{{ h.description }}{% if h.precip_pct %} <span class="weather-pop">{{ h.precip_pct }}%</span>{% endif %}</span>
             </div>
           {% endfor %}
         {% else %}
@@ -233,8 +295,8 @@
         {% if long_tasks %}
           {% for t in long_tasks %}
             <div class="long-row due-{{ t.color }}">
-              <div><strong>{{ t.text }}</strong></div>
-              <div class="when">{{ t.due }} · {{ t.humanized }}</div>
+              <strong>{{ t.text }}</strong>
+              <span class="when">{{ t.due }} · {{ t.humanized }}</span>
             </div>
           {% endfor %}
         {% else %}
@@ -249,8 +311,7 @@
         {% if short_tasks.main %}
           {% for t in short_tasks.main %}
             <div class="task">
-              <span class="bullet">○</span>{{ t.text }}
-              {% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
+              <span class="bullet">○</span><span class="task-text">{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
             </div>
           {% endfor %}
         {% else %}
@@ -261,8 +322,7 @@
           <p class="bucket-title">{{ bucket_name }} bucket</p>
           {% for t in items %}
             <div class="task">
-              <span class="bullet">○</span>{{ t.text }}
-              {% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
+              <span class="bullet">○</span><span class="task-text">{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
             </div>
           {% endfor %}
         {% endfor %}
@@ -276,8 +336,7 @@
         {% if g %}
           {% for t in g %}
             <div class="task">
-              <span class="bullet">○</span>{{ t.text }}
-              {% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
+              <span class="bullet">○</span><span class="task-text">{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
             </div>
           {% endfor %}
         {% else %}
@@ -286,16 +345,27 @@
       </div>
     {% endif %}
 
+    {% if 'completed' in sections and recent_completed %}
+      <div class="section">
+        <p class="section-title">Recently completed · last 3 days</p>
+        {% for c in recent_completed %}
+          <div class="completed-row">
+            <span class="completed-check">✓</span><span class="completed-text">{{ c.text }}</span><span class="completed-badge badge-{{ c.source }}">{{ c.source }}</span><span class="completed-when">{{ c.when }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
     {% if ('countdowns' in sections or 'countdown' in sections) and countdowns %}
       <div class="section">
         <p class="section-title">Countdowns</p>
         {% for c in countdowns %}
           <div class="countdown">
-            <div>
+            <div class="countdown-row">
               <div class="countdown-name">{{ c.name }}</div>
               <div class="countdown-target">target: {{ c.target }}</div>
+              <div class="countdown-label">{{ c.label }}</div>
             </div>
-            <div class="countdown-label">{{ c.label }}</div>
           </div>
         {% endfor %}
       </div>

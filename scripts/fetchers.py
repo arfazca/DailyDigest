@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import random
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
@@ -229,67 +230,117 @@ def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> 
     return {"hourly": hourly_out, "summary": summary}
 
 
-QUOTE_REFRESH_HOUR = 18
+POOL_TARGET = 12
+ZEN_TAKE = 10
+QUOTABLE_TAKE = 5
+
+FALLBACK_QUOTE = {
+    "text": "The struggle you're in today is developing the strength you need for tomorrow.",
+    "author": "Robert Tew",
+    "source": "fallback",
+}
 
 
-def _fetch_quote_zen(conn) -> dict | None:
+def _normalize_quote(text: str, author: str, source: str) -> dict | None:
+    text = (text or "").strip()
+    author = (author or "").strip()
+    if not (10 <= len(text) <= 500):
+        return None
+    return {"text": text, "author": author, "source": source}
+
+
+def _fetch_quotes_zen(conn, n: int) -> list[dict]:
     try:
-        r = requests.get("https://zenquotes.io/api/random", timeout=15)
+        r = requests.get("https://zenquotes.io/api/quotes", timeout=15)
         r.raise_for_status()
         data = r.json()
-        if isinstance(data, list) and data:
-            text = (data[0].get("q") or "").strip()
-            author = (data[0].get("a") or "").strip()
-            if 10 <= len(text) <= 500:
-                return {"text": text, "author": author, "source": "zenquotes"}
     except Exception as exc:
-        db.log(conn, "WARN", f"zenquotes failed: {exc}")
-    return None
+        db.log(conn, "WARN", f"zenquotes pool failed: {exc}")
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[dict] = []
+    for item in data:
+        q = _normalize_quote(item.get("q", ""), item.get("a", ""), "zenquotes")
+        if q:
+            out.append(q)
+    random.shuffle(out)
+    return out[:n]
 
 
-def _fetch_quote_quotable(conn) -> dict | None:
+def _fetch_quotes_quotable(conn, n: int) -> list[dict]:
     try:
         r = requests.get(
-            "https://api.quotable.io/random",
-            params={"tags": "perseverance|success|wisdom|courage"},
+            "https://api.quotable.io/quotes/random",
+            params={
+                "limit": min(n, 20),
+                "tags": "perseverance|success|wisdom|courage|inspirational|motivational",
+                "maxLength": 240,
+            },
             timeout=15,
         )
         r.raise_for_status()
         data = r.json()
-        text = (data.get("content") or "").strip()
-        author = (data.get("author") or "").strip()
-        if text:
-            return {"text": text, "author": author, "source": "quotable"}
     except Exception as exc:
-        db.log(conn, "WARN", f"quotable failed: {exc}")
-    return None
+        db.log(conn, "WARN", f"quotable pool failed: {exc}")
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[dict] = []
+    for item in data:
+        q = _normalize_quote(item.get("content", ""), item.get("author", ""), "quotable")
+        if q:
+            out.append(q)
+    return out[:n]
+
+
+def _build_quote_pool(conn, for_date) -> list[dict]:
+    zen = _fetch_quotes_zen(conn, ZEN_TAKE)
+    quotable = _fetch_quotes_quotable(conn, QUOTABLE_TAKE)
+    combined = zen + quotable
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for q in combined:
+        key = q["text"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(q)
+    if not deduped:
+        return []
+    inserted = db.quote_pool_put_many(conn, for_date, deduped)
+    db.log(
+        conn, "INFO",
+        f"quote pool: fetched zen={len(zen)} quotable={len(quotable)} "
+        f"deduped={len(deduped)} inserted={inserted}",
+    )
+    return db.quote_pool_for_date(conn, for_date)
 
 
 def fetch_quote(conn, now: datetime) -> dict:
     today = now.date()
+    db.quote_pool_prune(conn, days=7)
 
-    cached_today = db.quote_cache_get(conn, today)
-    if cached_today:
-        db.log(conn, "INFO", f"quote: today's cache hit ({cached_today['source']})")
-        return cached_today
+    pool = db.quote_pool_for_date(conn, today)
+    if len(pool) < POOL_TARGET:
+        fresh = _build_quote_pool(conn, today)
+        if fresh:
+            pool = fresh
 
-    most_recent = db.quote_cache_get_recent(conn, max_age_days=30)
-    is_refresh_hour = now.hour == QUOTE_REFRESH_HOUR
-    if most_recent and not is_refresh_hour:
-        db.log(conn, "INFO", f"quote: serving recent ({most_recent['for_date']}); refresh at {QUOTE_REFRESH_HOUR}:00")
-        return most_recent
+    if not pool:
+        recent = db.quote_pool_recent(conn, days=7)
+        if recent:
+            db.log(conn, "WARN", "quote pool: today empty; serving from recent days")
+            pool = recent
 
-    db.log(conn, "INFO", "quote: refreshing")
-    fresh = _fetch_quote_zen(conn) or _fetch_quote_quotable(conn)
-    if fresh is None:
-        if most_recent:
-            db.log(conn, "WARN", "quote: both APIs failed; keeping previous cached quote")
-            return most_recent
-        fresh = {
-            "text": "The struggle you're in today is developing the strength you need for tomorrow.",
-            "author": "Robert Tew",
-            "source": "fallback",
-        }
+    if not pool:
+        db.log(conn, "WARN", "quote pool: empty; using hardcoded fallback")
+        return FALLBACK_QUOTE
 
-    db.quote_cache_put(conn, today, fresh["text"], fresh["author"], fresh["source"])
-    return fresh
+    chosen = random.choice(pool)
+    db.log(conn, "INFO", f"quote: picked from pool of {len(pool)} ({chosen.get('source')})")
+    return {
+        "text": chosen["text"],
+        "author": chosen.get("author") or "",
+        "source": chosen.get("source") or "",
+    }

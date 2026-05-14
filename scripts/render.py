@@ -86,11 +86,19 @@ def age_block(birthdate: date, today: date) -> dict:
         "months": months,
         "days": days,
         "today_iso": today.isoformat(),
+        "today_pretty": today.strftime("%B %-d, %Y"),
         "next_age": years + 1,
         "to_next_months": max(0, n_months),
         "to_next_days": max(0, n_days),
         "to_next_total_days": delta.days,
     }
+
+
+_SOURCE_LABELS: dict[str, str] = {
+    "short": "Short task",
+    "long": "Long task",
+    "calendar": "Calendar",
+}
 
 
 def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dict], today: date) -> list[dict]:
@@ -107,6 +115,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
             "source": "long",
+            "source_label": _SOURCE_LABELS["long"],
             "removable": True,
         })
     for st in short_tasks:
@@ -123,6 +132,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
             "source": "short",
+            "source_label": _SOURCE_LABELS["short"],
             "removable": True,
         })
     for ev in events:
@@ -139,6 +149,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
             "source": "calendar",
+            "source_label": _SOURCE_LABELS["calendar"],
             "removable": False,
         })
     out.sort(key=lambda d: (d["days"], d["label"]))
@@ -252,6 +263,48 @@ def shape_reflections(rows: list[dict]) -> list[dict]:
             "period": r["period"],
             "expires_at": format_email_date(r["expires_at"], include_year=True),
         })
+    return out
+
+
+def _humanize_completed(completed_at: datetime, now: datetime) -> str:
+    delta = now - completed_at
+    seconds = int(delta.total_seconds())
+    if seconds < 0:
+        return "just now"
+    if seconds < 60:
+        return "just now"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} min ago"
+    days_diff = (now.date() - completed_at.date()).days
+    if days_diff <= 0:
+        return f"today, {completed_at.strftime('%-I:%M %p').lower()}"
+    if days_diff == 1:
+        return f"yesterday, {completed_at.strftime('%-I:%M %p').lower()}"
+    return f"{days_diff} days ago"
+
+
+def shape_recent_completed(short_rows: list[dict], long_rows: list[dict], now: datetime) -> list[dict]:
+    out: list[dict] = []
+    for r in short_rows:
+        if not r.get("completed_at"):
+            continue
+        out.append({
+            "text": r["text"],
+            "source": "short",
+            "completed_at": r["completed_at"],
+            "when": _humanize_completed(r["completed_at"], now),
+        })
+    for r in long_rows:
+        if not r.get("completed_at"):
+            continue
+        out.append({
+            "text": r["text"],
+            "source": "long",
+            "completed_at": r["completed_at"],
+            "when": _humanize_completed(r["completed_at"], now),
+        })
+    out.sort(key=lambda r: r["completed_at"], reverse=True)
     return out
 
 
