@@ -36,6 +36,29 @@ def _humanize_days(days: int) -> str:
     return f"in {days} days"
 
 
+def _ordinal_suffix(day: int) -> str:
+    if 10 <= day % 100 <= 20:
+        return "th"
+    return {1: "st", 2: "nd", 3: "rd"}.get(day % 10, "th")
+
+
+def _ordinal_day(day: int) -> str:
+    return f"{day}<sup>{_ordinal_suffix(day)}</sup>"
+
+
+def format_email_date(value: date | datetime, *, include_weekday: bool = True, include_year: bool = False) -> str:
+    label = f"{value.strftime('%B')} {_ordinal_day(value.day)}"
+    if include_year:
+        label = f"{label}, {value.year}"
+    if include_weekday:
+        label = f"{value.strftime('%A')} {label}"
+    return label
+
+
+def format_email_datetime(value: datetime, *, include_weekday: bool = True, include_year: bool = False) -> str:
+    return f"{format_email_date(value, include_weekday=include_weekday, include_year=include_year)} {value.strftime('%-I:%M %p')}"
+
+
 def age_block(birthdate: date, today: date) -> dict:
     years = today.year - birthdate.year
     months = today.month - birthdate.month
@@ -79,7 +102,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             continue
         out.append({
             "label": lt["text"],
-            "when": d.strftime("%a %b %-d"),
+            "when": format_email_date(d),
             "days": days,
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
@@ -95,7 +118,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             continue
         out.append({
             "label": st["text"],
-            "when": du.strftime("%a %b %-d %-I:%M %p").lower(),
+            "when": format_email_datetime(du),
             "days": days,
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
@@ -111,7 +134,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             continue
         out.append({
             "label": ev["summary"],
-            "when": ev["dtstart"].strftime("%a %b %-d %-I:%M %p").lower() if not ev.get("is_all_day") else ev["dtstart"].strftime("%a %b %-d"),
+            "when": format_email_datetime(ev["dtstart"]) if not ev.get("is_all_day") else format_email_date(ev["dtstart"]),
             "days": days,
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
@@ -158,7 +181,7 @@ def shape_short_tasks(rows: list[dict]) -> dict:
     for r in rows:
         item = {
             "text": r["text"],
-            "due_at": r["due_at"].strftime("%a %b %-d %-I:%M %p").lower() if r.get("due_at") else None,
+            "due_at": format_email_datetime(r["due_at"]) if r.get("due_at") else None,
         }
         if r.get("bucket"):
             buckets.setdefault(r["bucket"], []).append(item)
@@ -173,7 +196,7 @@ def shape_long_tasks(rows: list[dict], today: date) -> list[dict]:
         days = (r["due_date"] - today).days
         out.append({
             "text": r["text"],
-            "due": r["due_date"].strftime("%a %b %-d, %Y"),
+            "due": format_email_date(r["due_date"], include_year=True),
             "days": days,
             "humanized": _humanize_days(days),
             "color": _color_for_days(days) if days <= 14 else "neutral",
@@ -213,7 +236,7 @@ def shape_countdowns(rows: list[dict], now: datetime, single: str | None = None)
         days = max(0, delta.days)
         out.append({
             "name": r["name"],
-            "target": r["target_datetime"].strftime("%a %b %-d, %Y %-I:%M %p").lower(),
+            "target": format_email_datetime(r["target_datetime"], include_year=True),
             "label": label,
             "days": days,
         })
@@ -227,7 +250,7 @@ def shape_reflections(rows: list[dict]) -> list[dict]:
         out.append({
             "text": r["text"],
             "period": r["period"],
-            "expires_at": r["expires_at"].strftime("%a %b %-d, %Y"),
+            "expires_at": format_email_date(r["expires_at"], include_year=True),
         })
     return out
 

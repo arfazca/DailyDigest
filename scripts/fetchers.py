@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ipaddress
 import os
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 import recurring_ical_events
@@ -15,10 +17,53 @@ DUE_EVENT_RX = "due"
 SHORT_DURATION_SECONDS = 120
 
 
+def _is_safe_ics_url(url: str) -> bool:
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme != "https":
+            return False
+        hostname = (parsed.hostname or "").lower()
+        if not hostname:
+            return False
+        if hostname in ("localhost", "localhost.localdomain"):
+            return False
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                return False
+        except ValueError:
+            pass
+        return True
+    except Exception:
+        return False
+
+
+def _ical_dt_to_local(dt_val, tz: ZoneInfo) -> tuple[datetime, bool]:
+    if hasattr(dt_val, "tzinfo"):
+        if dt_val.tzinfo is None:
+            dt_val = dt_val.replace(tzinfo=tz)
+        return dt_val.astimezone(tz), False
+    return datetime.combine(dt_val, datetime.min.time(), tzinfo=tz), True
+
+
+def _ical_end_to_local(dt_prop, tz: ZoneInfo) -> datetime | None:
+    if dt_prop is None:
+        return None
+    e = dt_prop.dt
+    if hasattr(e, "tzinfo"):
+        if e.tzinfo is None:
+            e = e.replace(tzinfo=tz)
+        return e.astimezone(tz)
+    return datetime.combine(e, datetime.min.time(), tzinfo=tz)
+
+
 def fetch_calendar_events(calendar_row: dict, start: datetime, end: datetime, tz: ZoneInfo, conn) -> list[dict]:
     cid = calendar_row["id"]
     name = calendar_row["name"]
     url = calendar_row["ics_url"]
+    if not _is_safe_ics_url(url):
+        db.log(conn, "WARN", f"calendar {name}: skipped non-https or private URL")
+        return []
     db.log(conn, "INFO", f"fetching ICS: {name} ({url[:80]})")
     try:
         r = requests.get(url, timeout=30)
@@ -44,36 +89,12 @@ def fetch_calendar_events(calendar_row: dict, start: datetime, end: datetime, tz
         dtstart = component.get("dtstart")
         if not dtstart:
             continue
-        s = dtstart.dt
-        if hasattr(s, "tzinfo"):
-            if s.tzinfo is None:
-                s = s.replace(tzinfo=tz)
-            start_local = s.astimezone(tz)
-            is_all_day = False
-        else:
-            start_local = datetime.combine(s, datetime.min.time(), tzinfo=tz)
-            is_all_day = True
-
-        dtend = component.get("dtend")
-        end_local = None
-        if dtend:
-            e = dtend.dt
-            if hasattr(e, "tzinfo"):
-                if e.tzinfo is None:
-                    e = e.replace(tzinfo=tz)
-                end_local = e.astimezone(tz)
-            else:
-                end_local = datetime.combine(e, datetime.min.time(), tzinfo=tz)
-
+        start_local, is_all_day = _ical_dt_to_local(dtstart.dt, tz)
+        end_local = _ical_end_to_local(component.get("dtend"), tz)
         title = str(component.get("summary", "(no title)"))
         uid = str(component.get("uid", ""))
-
         duration = (end_local - start_local).total_seconds() if end_local else None
-        is_due = (
-            DUE_EVENT_RX in title.lower()
-            or (duration is not None and duration <= SHORT_DURATION_SECONDS)
-        )
-
+        is_due = DUE_EVENT_RX in title.lower() or (duration is not None and duration <= SHORT_DURATION_SECONDS)
         out.append({
             "calendar_id": cid,
             "calendar_name": name,
@@ -109,6 +130,72 @@ def fetch_all_calendars(conn, tz: ZoneInfo, now: datetime) -> list[dict]:
     return all_events
 
 
+def _fetch_raw_weather(conn, lat: float, lon: float, api_key: str) -> dict | None:
+    try:
+        r = requests.get(
+            "https://api.openweathermap.org/data/3.0/onecall",
+            params={"lat": lat, "lon": lon, "exclude": "minutely,daily,alerts", "units": "metric", "appid": api_key},
+            timeout=30,
+        )
+        if r.status_code == 401:
+            db.log(conn, "WARN", f"OneCall 3.0 401: {r.text[:300]}")
+            r = requests.get(
+                "https://api.openweathermap.org/data/2.5/forecast",
+                params={"lat": lat, "lon": lon, "units": "metric", "appid": api_key},
+                timeout=30,
+            )
+            if r.status_code == 401:
+                db.log(conn, "WARN", f"2.5/forecast 401: {r.text[:300]}")
+                probe = requests.get(
+                    "https://api.openweathermap.org/data/2.5/weather",
+                    params={"lat": lat, "lon": lon, "appid": api_key},
+                    timeout=15,
+                )
+                db.log(conn, "WARN", f"2.5/weather probe status={probe.status_code} body={probe.text[:200]}")
+                return None
+        r.raise_for_status()
+        payload = r.json()
+        db.weather_cache_put(conn, payload)
+        return payload
+    except Exception as exc:
+        db.log(conn, "ERROR", f"weather fetch failed: {exc}")
+        return None
+
+
+def _extract_hourly_entry(h: dict, is_forecast_list: bool) -> dict:
+    weather0 = (h.get("weather") or [{}])[0]
+    if is_forecast_list:
+        main = h.get("main") or {}
+        temp = round(main.get("temp", 0))
+        feels_like = round(main.get("feels_like", 0))
+    else:
+        temp = round(h.get("temp", 0))
+        feels_like = round(h.get("feels_like", 0))
+    return {
+        "temp": temp,
+        "feels_like": feels_like,
+        "summary": weather0.get("main", ""),
+        "description": weather0.get("description", ""),
+        "icon": weather0.get("icon", ""),
+        "pop": round((h.get("pop") or 0) * 100),
+    }
+
+
+def _build_hourly(payload: dict, now: datetime, tz: ZoneInfo, midnight: datetime) -> list[dict]:
+    cutoff = now.replace(minute=0, second=0, microsecond=0)
+    is_forecast_list = "list" in payload
+    entries = payload.get("hourly") or payload.get("list") or []
+    out: list[dict] = []
+    for h in entries:
+        dt = datetime.fromtimestamp(h["dt"], tz=tz)
+        if dt < cutoff or dt >= midnight:
+            continue
+        entry = _extract_hourly_entry(h, is_forecast_list)
+        entry["dt"] = dt
+        out.append(entry)
+    return out
+
+
 def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> dict | None:
     api_key = os.environ.get("OPENWEATHER_API_KEY")
     if not api_key:
@@ -120,83 +207,13 @@ def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> 
         db.log(conn, "INFO", f"weather: cache hit (fetched {cached['fetched_at']})")
         payload = cached["payload"]
     else:
-        key_len = len(api_key)
-        key_tail = api_key[-4:] if key_len >= 4 else "?"
-        db.log(conn, "INFO", f"weather: fetching (key len={key_len}, tail=...{key_tail}, lat={lat}, lon={lon})")
-        payload = None
-        try:
-            r = requests.get(
-                "https://api.openweathermap.org/data/3.0/onecall",
-                params={
-                    "lat": lat,
-                    "lon": lon,
-                    "exclude": "minutely,daily,alerts",
-                    "units": "metric",
-                    "appid": api_key,
-                },
-                timeout=30,
-            )
-            if r.status_code == 401:
-                db.log(conn, "WARN", f"OneCall 3.0 401: {r.text[:300]}")
-                r = requests.get(
-                    "https://api.openweathermap.org/data/2.5/forecast",
-                    params={"lat": lat, "lon": lon, "units": "metric", "appid": api_key},
-                    timeout=30,
-                )
-                if r.status_code == 401:
-                    db.log(conn, "WARN", f"2.5/forecast 401: {r.text[:300]}")
-                    probe = requests.get(
-                        "https://api.openweathermap.org/data/2.5/weather",
-                        params={"lat": lat, "lon": lon, "appid": api_key},
-                        timeout=15,
-                    )
-                    db.log(conn, "WARN", f"2.5/weather probe status={probe.status_code} body={probe.text[:200]}")
-                    return None
-            r.raise_for_status()
-            payload = r.json()
-            db.weather_cache_put(conn, payload)
-        except Exception as exc:
-            db.log(conn, "ERROR", f"weather fetch failed: {exc}")
+        db.log(conn, "INFO", f"weather: fetching (key len={len(api_key)}, lat={lat}, lon={lon})")
+        payload = _fetch_raw_weather(conn, lat, lon, api_key)
+        if payload is None:
             return None
 
-    midnight = (datetime.combine(now.date(), datetime.min.time(), tzinfo=tz) + timedelta(days=1))
-
-    hourly_out: list[dict] = []
-    if "hourly" in payload:
-        for h in payload["hourly"]:
-            dt = datetime.fromtimestamp(h["dt"], tz=tz)
-            if dt < now.replace(minute=0, second=0, microsecond=0):
-                continue
-            if dt >= midnight:
-                continue
-            weather0 = (h.get("weather") or [{}])[0]
-            hourly_out.append({
-                "dt": dt,
-                "temp": round(h.get("temp", 0)),
-                "feels_like": round(h.get("feels_like", 0)),
-                "summary": weather0.get("main", ""),
-                "description": weather0.get("description", ""),
-                "icon": weather0.get("icon", ""),
-                "pop": round((h.get("pop") or 0) * 100),
-            })
-    elif "list" in payload:
-        for h in payload["list"]:
-            dt = datetime.fromtimestamp(h["dt"], tz=tz)
-            if dt < now.replace(minute=0, second=0, microsecond=0):
-                continue
-            if dt >= midnight:
-                continue
-            weather0 = (h.get("weather") or [{}])[0]
-            main = h.get("main") or {}
-            hourly_out.append({
-                "dt": dt,
-                "temp": round(main.get("temp", 0)),
-                "feels_like": round(main.get("feels_like", 0)),
-                "summary": weather0.get("main", ""),
-                "description": weather0.get("description", ""),
-                "icon": weather0.get("icon", ""),
-                "pop": round((h.get("pop") or 0) * 100),
-            })
+    midnight = datetime.combine(now.date(), datetime.min.time(), tzinfo=tz) + timedelta(days=1)
+    hourly_out = _build_hourly(payload, now, tz, midnight)
 
     summary = ""
     if hourly_out:
@@ -204,7 +221,10 @@ def fetch_weather(conn, lat: float, lon: float, tz: ZoneInfo, now: datetime) -> 
         mid = sorted(temps)[len(temps) // 2]
         descs = [h["description"] for h in hourly_out if h["description"]]
         common = max(set(descs), key=descs.count) if descs else ""
-        summary = f"Mostly {mid}°C, {common}." if common else f"Mostly around {mid}°C."
+        if common:
+            summary = f"Mostly {mid}°C, {common}."
+        else:
+            summary = f"Mostly around {mid}°C."
 
     return {"hourly": hourly_out, "summary": summary}
 

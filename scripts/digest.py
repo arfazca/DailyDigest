@@ -21,90 +21,110 @@ def _now(tz: ZoneInfo) -> datetime:
     return datetime.now(tz)
 
 
+def _handle_add_short(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    if db.short_task_exists(conn, p["text"]):
+        change_log.append(f"already on short list: {p['text']}")
+        return
+    db.add_short_task(conn, p["text"], p.get("bucket"), p.get("due_at"))
+    suffix = f" #{p['bucket']}" if p.get("bucket") else ""
+    when = f" (due {render.format_email_datetime(p['due_at'])})" if p.get("due_at") else ""
+    change_log.append(f"added: {p['text']}{suffix}{when}")
+    db.add_pending_change(conn, "add_short", {"text": p["text"]})
+
+
+def _handle_add_long(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    db.add_long_task(conn, p["text"], p["due_date"])
+    change_log.append(f"added long task: {p['text']} (due {render.format_email_date(p['due_date'], include_year=True)})")
+    db.add_pending_change(conn, "add_long", {"text": p["text"], "due": p["due_date"].isoformat()})
+
+
+def _handle_add_countdown(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    db.add_countdown(conn, p["name"], p["target_datetime"])
+    change_log.append(f"countdown set: {p['name']} \u2192 {render.format_email_datetime(p['target_datetime'], include_year=True)}")
+    db.add_pending_change(conn, "add_countdown", {"name": p["name"]})
+
+
+def _handle_add_reflection(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    expires = cmd_parser.compute_reflection_expiry(p["period"], now)
+    db.add_reflection(conn, p["text"], p["period"], expires)
+    change_log.append(f"reflection set ({p['period']}): {p['text']} \u2014 clears {render.format_email_date(expires, include_year=True)} 11:59 PM")
+    db.add_pending_change(conn, "add_reflection", {"text": p["text"]})
+
+
+def _handle_add_calendar(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    db.add_calendar(conn, p["name"], p["url"])
+    change_log.append(f"calendar added: {p['name']}")
+    db.add_pending_change(conn, "add_calendar", {"name": p["name"]})
+
+
+def _handle_done_short(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    row = db.remove_short_task(conn, p["match"])
+    if row:
+        change_log.append(f"removed: {row['text']}")
+        db.add_pending_change(conn, "done_short", {"text": row["text"]})
+    else:
+        not_found.append(p["match"])
+
+
+def _handle_done_long(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    row = db.remove_long_task(conn, p["match"])
+    if row:
+        change_log.append(f"removed long task: {row['text']}")
+        db.add_pending_change(conn, "done_long", {"text": row["text"]})
+    else:
+        not_found.append(p["match"])
+
+
+def _handle_done_countdown(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    row = db.remove_countdown(conn, p["match"])
+    if row:
+        change_log.append(f"removed countdown: {row['name']}")
+    else:
+        not_found.append(p["match"])
+
+
+def _handle_done_reflection(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    row = db.remove_reflection(conn, p["match"])
+    if row:
+        change_log.append(f"removed reflection: {row['text']}")
+    else:
+        not_found.append(p["match"])
+
+
+def _handle_done_calendar(conn, p: dict, now: datetime, change_log: list[str], not_found: list[str]) -> None:
+    n = db.remove_calendar_by_name(conn, p["name"])
+    if n:
+        change_log.append(f"removed calendar: {p['name']}")
+    else:
+        not_found.append(p["name"])
+
+
+_ACTION_HANDLERS: dict = {
+    "add_short": _handle_add_short,
+    "add_long": _handle_add_long,
+    "add_countdown": _handle_add_countdown,
+    "add_reflection": _handle_add_reflection,
+    "add_calendar": _handle_add_calendar,
+    "done_short": _handle_done_short,
+    "done_long": _handle_done_long,
+    "done_countdown": _handle_done_countdown,
+    "done_reflection": _handle_done_reflection,
+    "done_calendar": _handle_done_calendar,
+}
+
+
 def _apply_command(conn, cmd, now: datetime, change_log: list[str], not_found: list[str]) -> None:
-    a = cmd.action
-    p = cmd.payload
+    handler = _ACTION_HANDLERS.get(cmd.action)
+    if handler:
+        handler(conn, cmd.payload, now, change_log, not_found)
 
-    if a == "add_short":
-        if db.short_task_exists(conn, p["text"]):
-            change_log.append(f"already on short list: {p['text']}")
-            return
-        db.add_short_task(conn, p["text"], p.get("bucket"), p.get("due_at"))
-        suffix = f" #{p['bucket']}" if p.get("bucket") else ""
-        when = f" (due {p['due_at'].strftime('%a %b %-d %-I:%M %p').lower()})" if p.get("due_at") else ""
-        change_log.append(f"added: {p['text']}{suffix}{when}")
-        db.add_pending_change(conn, "add_short", {"text": p["text"]})
-        return
 
-    if a == "add_long":
-        db.add_long_task(conn, p["text"], p["due_date"])
-        change_log.append(f"added long task: {p['text']} (due {p['due_date'].strftime('%a %b %-d, %Y')})")
-        db.add_pending_change(conn, "add_long", {"text": p["text"], "due": p["due_date"].isoformat()})
-        return
-
-    if a == "add_countdown":
-        db.add_countdown(conn, p["name"], p["target_datetime"])
-        change_log.append(f"countdown set: {p['name']} → {p['target_datetime'].strftime('%a %b %-d, %Y %-I:%M %p').lower()}")
-        db.add_pending_change(conn, "add_countdown", {"name": p["name"]})
-        return
-
-    if a == "add_reflection":
-        expires = cmd_parser.compute_reflection_expiry(p["period"], now)
-        db.add_reflection(conn, p["text"], p["period"], expires)
-        change_log.append(f"reflection set ({p['period']}): {p['text']} — clears {expires.strftime('%a %b %-d, %Y')} 11:59 PM")
-        db.add_pending_change(conn, "add_reflection", {"text": p["text"]})
-        return
-
-    if a == "add_calendar":
-        db.add_calendar(conn, p["name"], p["url"])
-        change_log.append(f"calendar added: {p['name']}")
-        db.add_pending_change(conn, "add_calendar", {"name": p["name"]})
-        return
-
-    if a == "done_short":
-        row = db.remove_short_task(conn, p["match"])
-        if row:
-            change_log.append(f"removed: {row['text']}")
-            db.add_pending_change(conn, "done_short", {"text": row["text"]})
-        else:
-            not_found.append(p["match"])
-        return
-
-    if a == "done_long":
-        row = db.remove_long_task(conn, p["match"])
-        if row:
-            change_log.append(f"removed long task: {row['text']}")
-            db.add_pending_change(conn, "done_long", {"text": row["text"]})
-        else:
-            not_found.append(p["match"])
-        return
-
-    if a == "done_countdown":
-        row = db.remove_countdown(conn, p["match"])
-        if row:
-            change_log.append(f"removed countdown: {row['name']}")
-        else:
-            not_found.append(p["match"])
-        return
-
-    if a == "done_reflection":
-        row = db.remove_reflection(conn, p["match"])
-        if row:
-            change_log.append(f"removed reflection: {row['text']}")
-        else:
-            not_found.append(p["match"])
-        return
-
-    if a == "done_calendar":
-        n = db.remove_calendar_by_name(conn, p["name"])
-        if n:
-            change_log.append(f"removed calendar: {p['name']}")
-        else:
-            not_found.append(p["name"])
-        return
-
-    if a == "show_countdown":
-        return
+def _find_countdown_name(commands_all: list) -> str | None:
+    name = None
+    for _, c in commands_all:
+        if c.action == "show_countdown" and c.payload.get("name"):
+            name = c.payload["name"]
+    return name
 
 
 def _collect_inbox(conn, tz: ZoneInfo, now: datetime):
@@ -114,7 +134,6 @@ def _collect_inbox(conn, tz: ZoneInfo, now: datetime):
     show_full = False
     show_partials: set[str] = set()
     unknowns: list[tuple[str, str, str]] = []
-    countdown_requested_name: str | None = None
     has_keyword_lines = False
 
     for m in msgs:
@@ -127,9 +146,6 @@ def _collect_inbox(conn, tz: ZoneInfo, now: datetime):
         commands_all.extend([(m, c) for c in pr.commands])
         for line, reason in pr.unknowns:
             unknowns.append((m["subject"], line, reason))
-        for c in pr.commands:
-            if c.action == "show_countdown" and c.payload.get("name"):
-                countdown_requested_name = c.payload["name"]
 
     change_log: list[str] = []
     not_found: list[str] = []
@@ -155,10 +171,32 @@ def _collect_inbox(conn, tz: ZoneInfo, now: datetime):
         "change_log": change_log,
         "not_found": not_found,
         "unknowns": unknowns,
-        "countdown_requested_name": countdown_requested_name,
+        "countdown_requested_name": _find_countdown_name(commands_all),
         "has_keyword_lines": has_keyword_lines,
         "n_messages": len(msgs),
     }
+
+
+def _fetch_weather_ctx(conn, profile: dict, sections: set[str], tz: ZoneInfo, now: datetime) -> dict | None:
+    if "weather" not in sections and "timetable" not in sections:
+        return None
+    if not profile.get("weather_lat") or not profile.get("weather_lon"):
+        return None
+    w = fetchers.fetch_weather(conn, float(profile["weather_lat"]), float(profile["weather_lon"]), tz, now)
+    return render.shape_weather(w)
+
+
+def _fetch_calendar_ctx(conn, sections: set[str], tz: ZoneInfo, now: datetime) -> list[dict] | None:
+    if "calendar" not in sections and "timetable" not in sections and "due" not in sections:
+        return None
+    return fetchers.fetch_all_calendars(conn, tz, now)
+
+
+def _fetch_countdown_ctx(conn, sections: set[str], inbox: dict, now: datetime) -> list | None:
+    if "countdown" not in sections and "countdowns" not in sections:
+        return None
+    single = inbox.get("countdown_requested_name") if "countdown" in sections and "countdowns" not in sections else None
+    return render.shape_countdowns(db.countdowns(conn), now, single)
 
 
 def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox: dict) -> dict:
@@ -167,8 +205,8 @@ def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox:
 
     ctx: dict = {
         "weekday": now.strftime("%A"),
-        "date_long": now.strftime("%B %-d, %Y"),
-        "now_label": now.strftime("%-I:%M %p").lower(),
+        "date_long": render.format_email_date(now, include_weekday=False, include_year=True),
+        "now_label": now.strftime("%-I:%M %p"),
         "today_iso": today.isoformat(),
         "sections": sections,
         "change_log": inbox["change_log"],
@@ -179,13 +217,12 @@ def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox:
     if "age" in sections and profile.get("birthdate"):
         ctx["age"] = render.age_block(profile["birthdate"], today)
 
-    if "weather" in sections or "timetable" in sections:
-        if profile.get("weather_lat") and profile.get("weather_lon"):
-            w = fetchers.fetch_weather(conn, float(profile["weather_lat"]), float(profile["weather_lon"]), tz, now)
-            ctx["weather"] = render.shape_weather(w)
+    weather = _fetch_weather_ctx(conn, profile, sections, tz, now)
+    if weather is not None:
+        ctx["weather"] = weather
 
-    if "calendar" in sections or "timetable" in sections or "due" in sections:
-        events = fetchers.fetch_all_calendars(conn, tz, now)
+    events = _fetch_calendar_ctx(conn, sections, tz, now)
+    if events is not None:
         ctx["events"] = events
         ctx["timeline"] = render.shape_timeline(events, now)
 
@@ -199,9 +236,9 @@ def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox:
         events_for_due = ctx.get("events") or []
         ctx["dues"] = render.build_dues(db.long_tasks(conn), db.short_tasks(conn), events_for_due, today)
 
-    if "countdown" in sections or "countdowns" in sections:
-        single = inbox.get("countdown_requested_name") if "countdown" in sections and "countdowns" not in sections else None
-        ctx["countdowns"] = render.shape_countdowns(db.countdowns(conn), now, single)
+    countdowns = _fetch_countdown_ctx(conn, sections, inbox, now)
+    if countdowns is not None:
+        ctx["countdowns"] = countdowns
 
     if "reflection" in sections:
         ctx["reflections"] = render.shape_reflections(db.reflections(conn))
@@ -212,8 +249,20 @@ def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox:
     return ctx
 
 
-def _full_sections(now: datetime) -> set[str]:
+def _full_sections() -> set[str]:
     return {"age", "calendar", "weather", "short", "long", "due", "countdowns", "reflection", "quote"}
+
+
+def _sections_for_partials(partials: set[str]) -> set[str]:
+    sections: set[str] = set()
+    for p in partials:
+        if p == "timetable":
+            sections.update({"calendar", "weather"})
+        elif p == "countdowns":
+            sections.add("countdowns")
+        else:
+            sections.add(p)
+    return sections
 
 
 def _decide_email(now: datetime, inbox: dict) -> tuple[str | None, set[str]]:
@@ -224,18 +273,10 @@ def _decide_email(now: datetime, inbox: dict) -> tuple[str | None, set[str]]:
     partials = inbox["show_partials"]
 
     if show_full or scheduled:
-        s = _full_sections(now)
-        return ("digest", s)
+        return ("digest", _full_sections())
 
     if partials:
-        s: set[str] = set()
-        for p in partials:
-            if p == "timetable":
-                s.update({"calendar", "weather"})
-            elif p == "countdowns":
-                s.add("countdowns")
-            else:
-                s.add(p)
+        s = _sections_for_partials(partials)
         if has_changes:
             s.add("changes_banner")
         return ("partial", s)

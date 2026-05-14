@@ -164,7 +164,6 @@ def run_migrations(conn) -> None:
 
 
 def seed_from_env(conn) -> None:
-    """One-time seed of profile + calendars from env vars if DB is empty."""
     with conn.cursor() as cur:
         cur.execute("SELECT id FROM profile WHERE id = 1")
         if cur.fetchone() is None:
@@ -175,7 +174,7 @@ def seed_from_env(conn) -> None:
             )
 
         cur.execute("SELECT birthdate, weather_lat, weather_lon FROM profile WHERE id=1")
-        bd, lat, lon = cur.fetchone()
+        bd, lat, _ = cur.fetchone()
 
         if bd is None and os.environ.get("BIRTHDATE"):
             cur.execute(
@@ -290,7 +289,6 @@ def add_short_task(conn, text: str, bucket: str | None, due_at: datetime | None)
 
 
 def remove_short_task(conn, substring: str) -> dict | None:
-    """Remove the first short task whose text contains substring (case-insensitive)."""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
             "SELECT * FROM tasks_short WHERE text ILIKE %s ORDER BY id LIMIT 1",
@@ -412,12 +410,21 @@ def remove_reflection(conn, substring: str) -> dict | None:
     return dict(row)
 
 
+_PROFILE_COLUMN_SQL: dict[str, str] = {
+    "birthdate": "UPDATE profile SET birthdate = %s WHERE id = 1",
+    "weather_lat": "UPDATE profile SET weather_lat = %s WHERE id = 1",
+    "weather_lon": "UPDATE profile SET weather_lon = %s WHERE id = 1",
+    "timezone": "UPDATE profile SET timezone = %s WHERE id = 1",
+}
+
+
 def set_profile_field(conn, field: str, value: Any) -> None:
-    if field not in {"birthdate", "weather_lat", "weather_lon", "timezone"}:
+    sql = _PROFILE_COLUMN_SQL.get(field)
+    if sql is None:
         raise ValueError(f"unknown profile field: {field}")
     with conn.cursor() as cur:
         cur.execute("INSERT INTO profile (id) VALUES (1) ON CONFLICT DO NOTHING")
-        cur.execute(f"UPDATE profile SET {field} = %s WHERE id = 1", (value,))
+        cur.execute(sql, (value,))
     conn.commit()
 
 

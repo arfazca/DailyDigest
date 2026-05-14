@@ -128,6 +128,27 @@ def _strip_show_fillers(words: list[str]) -> list[str]:
     return out
 
 
+_PERIOD_CANONICAL: dict[str, str] = {
+    "half-week": "half-week",
+    "week": "week",
+    "half-month": "half-month",
+    "month": "month",
+    "half-year": "half-year",
+    "year": "year",
+    "6-month": "half-year",
+    "6 month": "half-year",
+    "six-month": "half-year",
+    "six month": "half-year",
+}
+
+
+def _match_partial_alias(joined: str) -> str | None:
+    for key in sorted(SHOW_PARTIAL_ALIASES.keys(), key=len, reverse=True):
+        if joined == key or joined.startswith(key + " ") or joined.endswith(" " + key) or f" {key} " in f" {joined} ":
+            return SHOW_PARTIAL_ALIASES[key]
+    return None
+
+
 def _classify_show(rest: str) -> tuple[str | None, str | None, str | None]:
     rest = _smart_unquote(rest).strip()
     if not rest:
@@ -139,13 +160,9 @@ def _classify_show(rest: str) -> tuple[str | None, str | None, str | None]:
     words = _strip_show_fillers(words)
     lowered = [w.lower() for w in words]
 
-    if not lowered:
+    if not lowered or lowered[0] in SHOW_FULL:
         return ("full", None, None)
 
-    if lowered[0] in SHOW_FULL:
-        return ("full", None, None)
-
-    bucket_source = None
     if "grocery" in lowered:
         if any(w in lowered for w in ("long",)):
             return (None, None, GROCERY_LONG_ERR)
@@ -157,10 +174,9 @@ def _classify_show(rest: str) -> tuple[str | None, str | None, str | None]:
     if lowered[0] == "countdowns":
         return ("countdowns", None, None)
 
-    joined = " ".join(lowered)
-    for key in sorted(SHOW_PARTIAL_ALIASES.keys(), key=len, reverse=True):
-        if joined == key or joined.startswith(key + " ") or joined.endswith(" " + key) or f" {key} " in f" {joined} ":
-            return (SHOW_PARTIAL_ALIASES[key], None, None)
+    alias = _match_partial_alias(" ".join(lowered))
+    if alias:
+        return (alias, None, None)
 
     return (None, None, f"unrecognized show target: {rest!r}")
 
@@ -191,71 +207,55 @@ def _split_on_due(payload_text: str) -> tuple[str, str | None]:
     return payload_text.strip(), None
 
 
-def _parse_add(rest: str, tz: ZoneInfo) -> Command | tuple[None, str]:
-    quoted = _extract_quoted(rest)
+def _parse_add_long(rest: str, quoted: str, tz: ZoneInfo) -> Command | tuple[None, str]:
+    after_q = rest.split('"' if '"' in rest else "'", 2)
+    date_blob = after_q[2] if len(after_q) == 3 else ""
+    _, due_part = _split_on_due(date_blob)
+    if not due_part:
+        tail_words = re.sub(r'"[^"]*"|\'[^\']*\'', "", rest)
+        _, due_part = _split_on_due(tail_words)
+    if not due_part:
+        return None, "add long task: missing due date — e.g. due 15 august 2026"
+    due = _parse_datetime(due_part, tz)
+    if not due:
+        return None, f"add long task: could not parse date {due_part!r}"
+    return Command("add_long", {"text": quoted, "due_date": due.date()}, rest), None
+
+
+def _parse_add_countdown(rest: str, quoted: str, tz: ZoneInfo) -> Command | tuple[None, str]:
+    after_q = rest.split('"' if '"' in rest else "'", 2)
+    tail = after_q[2].strip() if len(after_q) == 3 else ""
+    tail = re.sub(r"^(at|on|for|to)\b", "", tail, flags=re.IGNORECASE).strip()
+    target = _parse_datetime(tail, tz)
+    if not target:
+        return None, f"add countdown: could not parse target {tail!r}"
+    return Command("add_countdown", {"name": quoted, "target_datetime": target}, rest), None
+
+
+def _parse_add_reflection(rest: str, quoted: str) -> Command | tuple[None, str]:
     lowered = rest.lower()
+    period = None
+    for key in sorted(PERIOD_TO_DELTA.keys(), key=len, reverse=True):
+        if re.search(r"\b" + re.escape(key) + r"\b", lowered):
+            period = _PERIOD_CANONICAL.get(key, key)
+            break
+    if period is None:
+        return None, "add reflection: missing period (half-week/week/half-month/month/half-year/year)"
+    return Command("add_reflection", {"text": quoted, "period": period}, rest), None
 
-    if re.search(r"\blong(\s+task)?\b", lowered):
-        if quoted is None:
-            return None, "add long task: missing quoted text"
-        after_q = rest.split('"' if '"' in rest else "'", 2)
-        date_blob = after_q[2] if len(after_q) == 3 else ""
-        _, due_part = _split_on_due(date_blob)
-        if not due_part:
-            tail_words = re.sub(r'"[^"]*"|\'[^\']*\'', "", rest)
-            _, due_part = _split_on_due(tail_words)
-        if not due_part:
-            return None, 'add long task: missing due date — e.g. due 15 august 2026'
-        due = _parse_datetime(due_part, tz)
-        if not due:
-            return None, f"add long task: could not parse date {due_part!r}"
-        return Command("add_long", {"text": quoted, "due_date": due.date()}, rest), None
 
-    if re.search(r"\bcountdown\b", lowered):
-        if quoted is None:
-            return None, 'add countdown: missing quoted name'
-        after_q = rest.split('"' if '"' in rest else "'", 2)
-        tail = after_q[2].strip() if len(after_q) == 3 else ""
-        tail = re.sub(r"^(at|on|for|to)\b", "", tail, flags=re.IGNORECASE).strip()
-        target = _parse_datetime(tail, tz)
-        if not target:
-            return None, f"add countdown: could not parse target {tail!r}"
-        return Command("add_countdown", {"name": quoted, "target_datetime": target}, rest), None
+def _parse_add_calendar(rest: str, quoted: str) -> Command | tuple[None, str]:
+    m = re.search(r"https://\S+", rest)
+    if not m:
+        return None, "add calendar: missing https:// URL"
+    return Command("add_calendar", {"name": quoted, "url": m.group(0)}, rest), None
 
-    if re.search(r"\breflection\b", lowered):
-        if quoted is None:
-            return None, "add reflection: missing quoted text"
-        period = None
-        for key in sorted(PERIOD_TO_DELTA.keys(), key=len, reverse=True):
-            if re.search(r"\b" + re.escape(key) + r"\b", lowered):
-                period = "half-year" if "year" in key and "half" in key else \
-                         "year" if key == "year" else \
-                         "half-month" if "month" in key and "half" in key else \
-                         "month" if key == "month" else \
-                         "half-week" if "week" in key and "half" in key else \
-                         "week" if key == "week" else \
-                         "half-year" if "6" in key or "six" in key else key
-                break
-        if period is None:
-            return None, "add reflection: missing period (half-week/week/half-month/month/half-year/year)"
-        return Command("add_reflection", {"text": quoted, "period": period}, rest), None
 
-    if re.search(r"\bcalendar\b", lowered):
-        if quoted is None:
-            return None, "add calendar: missing quoted name"
-        m = re.search(r"https?://\S+", rest)
-        if not m:
-            return None, "add calendar: missing URL"
-        return Command("add_calendar", {"name": quoted, "url": m.group(0)}, rest), None
-
-    if quoted is None:
-        return None, 'add: missing quoted text (use add "your task")'
-
+def _parse_add_short(rest: str, quoted: str, tz: ZoneInfo) -> Command | tuple[None, str]:
     bucket = None
     m = re.search(r"#(\w+)", rest)
     if m:
         bucket = m.group(1).lower()
-
     after_q = rest.split('"' if '"' in rest else "'", 2)
     tail = after_q[2] if len(after_q) == 3 else ""
     _, due_part = _split_on_due(tail)
@@ -264,39 +264,93 @@ def _parse_add(rest: str, tz: ZoneInfo) -> Command | tuple[None, str]:
         due_at = _parse_datetime(due_part, tz)
         if not due_at:
             return None, f"add: could not parse due {due_part!r}"
-
     return Command("add_short", {"text": quoted, "bucket": bucket, "due_at": due_at}, rest), None
+
+
+def _parse_add(rest: str, tz: ZoneInfo) -> Command | tuple[None, str]:
+    quoted = _extract_quoted(rest)
+    lowered = rest.lower()
+
+    if re.search(r"\blong(\s+task)?\b", lowered):
+        if quoted is None:
+            return None, "add long task: missing quoted text"
+        return _parse_add_long(rest, quoted, tz)
+
+    if re.search(r"\bcountdown\b", lowered):
+        if quoted is None:
+            return None, "add countdown: missing quoted name"
+        return _parse_add_countdown(rest, quoted, tz)
+
+    if re.search(r"\breflection\b", lowered):
+        if quoted is None:
+            return None, "add reflection: missing quoted text"
+        return _parse_add_reflection(rest, quoted)
+
+    if re.search(r"\bcalendar\b", lowered):
+        if quoted is None:
+            return None, "add calendar: missing quoted name"
+        return _parse_add_calendar(rest, quoted)
+
+    if quoted is None:
+        return None, 'add: missing quoted text (use add "your task")'
+
+    return _parse_add_short(rest, quoted, tz)
+
+
+_DONE_DISPATCH = [
+    ("long ", "done_long", "match"),
+    ("countdown", "done_countdown", "match"),
+    ("reflection", "done_reflection", "match"),
+    ("calendar", "done_calendar", "name"),
+]
 
 
 def _parse_done(rest: str) -> Command | tuple[None, str]:
     lowered = rest.lower().strip()
     quoted = _extract_quoted(rest)
 
-    if lowered.startswith("long "):
-        target = quoted or rest[5:].strip().strip('"\'')
-        if not target:
-            return None, "done long: missing target"
-        return Command("done_long", {"match": target}, rest), None
-    if lowered.startswith("countdown"):
-        target = quoted or rest[len("countdown"):].strip().strip('"\'')
-        if not target:
-            return None, "done countdown: missing target"
-        return Command("done_countdown", {"match": target}, rest), None
-    if lowered.startswith("reflection"):
-        target = quoted or rest[len("reflection"):].strip().strip('"\'')
-        if not target:
-            return None, "done reflection: missing target"
-        return Command("done_reflection", {"match": target}, rest), None
-    if lowered.startswith("calendar"):
-        target = quoted or rest[len("calendar"):].strip().strip('"\'')
-        if not target:
-            return None, "done calendar: missing target"
-        return Command("done_calendar", {"name": target}, rest), None
+    for prefix, action, pkey in _DONE_DISPATCH:
+        if lowered.startswith(prefix):
+            tail = rest[len(prefix):].strip().strip('"\'')
+            target = quoted or tail
+            if not target:
+                return None, f"done {prefix.strip()}: missing target"
+            return Command(action, {pkey: target}, rest), None
 
     target = quoted or rest.strip().strip('"\'')
     if not target:
         return None, "done: missing target"
     return Command("done_short", {"match": target}, rest), None
+
+
+def _handle_show_line(rest: str, line: str, result: ParseResult) -> None:
+    kind, arg, err = _classify_show(rest)
+    if err:
+        result.unknowns.append((line, err))
+        return
+    if kind == "full":
+        result.show_full = True
+    elif kind == "countdown":
+        result.show_partials.add("countdown")
+        result.commands.append(Command("show_countdown", {"name": arg or ""}, line))
+    else:
+        result.show_partials.add(kind)
+
+
+def _handle_add_line(rest: str, line: str, tz: ZoneInfo, result: ParseResult) -> None:
+    cmd, err = _parse_add(rest, tz)
+    if cmd:
+        result.commands.append(cmd)
+    else:
+        result.unknowns.append((line, err))
+
+
+def _handle_done_line(rest: str, line: str, result: ParseResult) -> None:
+    cmd, err = _parse_done(rest)
+    if cmd:
+        result.commands.append(cmd)
+    else:
+        result.unknowns.append((line, err))
 
 
 def parse_email(body: str, tz: ZoneInfo) -> ParseResult:
@@ -315,34 +369,11 @@ def parse_email(body: str, tz: ZoneInfo) -> ParseResult:
         result.has_keyword_lines = True
 
         if head == "show":
-            kind, arg, err = _classify_show(rest)
-            if err:
-                result.unknowns.append((line, err))
-                continue
-            if kind == "full":
-                result.show_full = True
-            elif kind == "countdown":
-                result.show_partials.add("countdown")
-                result.commands.append(Command("show_countdown", {"name": arg or ""}, line))
-            else:
-                result.show_partials.add(kind)
-            continue
-
-        if head in ("add", "+"):
-            cmd, err = _parse_add(rest, tz)
-            if cmd:
-                result.commands.append(cmd)
-            else:
-                result.unknowns.append((line, err))
-            continue
-
-        if head in ("done", "remove", "delete", "del"):
-            cmd, err = _parse_done(rest)
-            if cmd:
-                result.commands.append(cmd)
-            else:
-                result.unknowns.append((line, err))
-            continue
+            _handle_show_line(rest, line, result)
+        elif head in ("add", "+"):
+            _handle_add_line(rest, line, tz, result)
+        elif head in ("done", "remove", "delete", "del"):
+            _handle_done_line(rest, line, result)
 
     return result
 

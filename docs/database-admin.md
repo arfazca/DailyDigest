@@ -1,9 +1,9 @@
-# DailyDigest — database admin guide
+# DailyDigest: database admin guide
 
-Everything DailyDigest knows is in Postgres. You can manipulate any of it two ways:
+Everything DailyDigest knows is in Postgres. You can update it in two ways:
 
-1. **By email** (preferred): send commands to your `morning@yourdomain.tld` address. See [commands.md](commands.md) for the full grammar.
-2. **By SQL** (direct): connect to Neon with `psql "$DATABASE_URL"` and run SQL.
+1. **By email:** send commands to your `morning@yourdomain.tld` address. See [commands.md](commands.md) for the full grammar.
+2. **By SQL:** connect to Neon with `psql "$DATABASE_URL"` and run SQL.
 
 This file lists the SQL form for every common admin operation.
 
@@ -36,26 +36,21 @@ To re-bootstrap from env vars on next run, delete the row:
 
 ```sql
 DELETE FROM profile WHERE id = 1;
--- Next digest run re-seeds from BIRTHDATE / WEATHER_LAT / WEATHER_LON / TIMEZONE
 ```
+
+The next digest run seeds the row again from `BIRTHDATE`, `WEATHER_LAT`, `WEATHER_LON`, and `TIMEZONE`.
 
 ## Calendars
 
 Multiple rows, one per ICS feed.
 
+Use email or SQL to add a calendar. Use updates to disable or re-enable it, and delete it to remove cached events through `ON DELETE CASCADE`.
+
 ```sql
 SELECT id, name, enabled, ics_url FROM calendars ORDER BY id;
-
--- Add a calendar (or via email: add calendar "Work" https://...ics)
 INSERT INTO calendars (name, ics_url) VALUES ('Work', 'https://...ics');
-
--- Disable without losing the row
 UPDATE calendars SET enabled = FALSE WHERE name ILIKE 'Work';
-
--- Re-enable
 UPDATE calendars SET enabled = TRUE WHERE name ILIKE 'Work';
-
--- Hard delete (also drops cached events via ON DELETE CASCADE)
 DELETE FROM calendars WHERE name ILIKE 'Work';
 ```
 
@@ -85,7 +80,7 @@ INSERT INTO tasks_long (text, due_date) VALUES ('M license practice exam', '2027
 DELETE FROM tasks_long WHERE text ILIKE '%M license%';
 ```
 
-`due_date` is `DATE`, no time component (per the original spec — long tasks have dates, short tasks can have a datetime).
+`due_date` is `DATE` with no time component. Long tasks use dates; short tasks can use a datetime.
 
 ## Countdowns
 
@@ -115,44 +110,34 @@ VALUES ('lift 3× weekly', 'month',
 DELETE FROM reflections WHERE text ILIKE '%lift%';
 ```
 
-Period values used by the parser: `half-week`, `week`, `half-month`, `month`, `half-year`, `year`. The string is only display-decoration — `expires_at` is what governs auto-deletion.
+Period values used by the parser: `half-week`, `week`, `half-month`, `month`, `half-year`, `year`. The string is for display only. `expires_at` controls auto-deletion.
 
 ## Caches
 
-You almost never need to touch these — but if you want to force a refresh:
+You usually do not need to touch these tables, but you can clear them to force a refresh:
 
 ```sql
--- Force a weather refetch on next run that needs weather
 DELETE FROM weather_cache;
-
--- Force a quote refetch on next run (or wait for 6 PM, the natural refresh)
 DELETE FROM quote_cache WHERE for_date = CURRENT_DATE;
 ```
 
 ## Inspection
 
+Use these queries to inspect recent processing, pending changes, logs, and cached events.
+
 ```sql
--- All emails ever processed (and how many commands per email)
 SELECT processed_at, subject, num_commands, num_errors
 FROM processed_emails ORDER BY processed_at DESC LIMIT 20;
-
--- Pending changes that haven't been emailed out yet
 SELECT id, kind, payload, created_at
 FROM pending_changes WHERE notified_at IS NULL ORDER BY id;
-
--- Latest GitHub Actions run logs (per-run UUID)
 SELECT ts, level, message
 FROM debug_log
 WHERE run_id = (SELECT run_id FROM debug_log ORDER BY ts DESC LIMIT 1)
 ORDER BY ts;
-
--- Find runs that emitted ERRORs
 SELECT DISTINCT run_id, MIN(ts) AS started
 FROM debug_log
 WHERE level = 'ERROR'
 GROUP BY run_id ORDER BY started DESC LIMIT 10;
-
--- Most recent events cached per calendar
 SELECT c.name, COUNT(*) AS n, MAX(ec.fetched_at) AS last_fetched
 FROM events_cache ec JOIN calendars c ON c.id = ec.calendar_id
 GROUP BY c.name;

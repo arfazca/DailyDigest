@@ -1,6 +1,6 @@
 # cron-job.org Setup
 
-GitHub Actions has an unreliable built-in cron scheduler that can run 1-3 hours late. cron-job.org fires exactly on the hour by calling the GitHub API to trigger the workflow on demand. This doc covers the exact setup that is confirmed working.
+GitHub Actions has an unreliable built-in cron scheduler that can run 1-3 hours late. cron-job.org fires on the hour by calling the GitHub API to trigger the workflow on demand. This doc covers the setup used for this repo.
 
 ## What it does
 
