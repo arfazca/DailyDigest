@@ -11,6 +11,7 @@ import recurring_ical_events
 import requests
 from icalendar import Calendar
 
+import concept2
 import db
 
 
@@ -343,4 +344,33 @@ def fetch_quote(conn, now: datetime) -> dict:
         "text": chosen["text"],
         "author": chosen.get("author") or "",
         "source": chosen.get("source") or "",
+    }
+
+
+CONCEPT2_WINDOW_DAYS = 30
+
+
+def fetch_concept2_data(conn, now: datetime) -> dict | None:
+    if not concept2.get_token():
+        return None
+    try:
+        concept2.sync_results(conn)
+    except Exception as exc:
+        db.log(conn, "ERROR", f"concept2 sync failed: {exc}")
+    tz = now.tzinfo or ZoneInfo("UTC")
+    today = now.date()
+    week_start = today - timedelta(days=today.weekday())
+    week_start_dt = datetime.combine(week_start, datetime.min.time(), tzinfo=tz)
+    week_end_dt = week_start_dt + timedelta(days=7)
+    week = db.concept2_results_window(conn, week_start_dt, week_end_dt)
+    recent = db.concept2_results_since(conn, now - timedelta(days=CONCEPT2_WINDOW_DAYS))
+    lifetime = db.concept2_lifetime_totals(conn)
+    if not recent and not lifetime.get("n"):
+        return None
+    return {
+        "week": week,
+        "week_start": week_start,
+        "recent": recent,
+        "lifetime": lifetime,
+        "window_days": CONCEPT2_WINDOW_DAYS,
     }

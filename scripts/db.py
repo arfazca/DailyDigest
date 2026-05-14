@@ -53,7 +53,6 @@ def run_migrations(conn) -> None:
             created_at    TIMESTAMPTZ DEFAULT NOW(),
             updated_at    TIMESTAMPTZ DEFAULT NOW()
         );
-        ALTER TABLE tasks_short ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
         CREATE INDEX IF NOT EXISTS tasks_short_completed_idx
             ON tasks_short(completed_at);
 
@@ -65,7 +64,6 @@ def run_migrations(conn) -> None:
             created_at    TIMESTAMPTZ DEFAULT NOW(),
             updated_at    TIMESTAMPTZ DEFAULT NOW()
         );
-        ALTER TABLE tasks_long ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ;
         CREATE INDEX IF NOT EXISTS tasks_long_completed_idx
             ON tasks_long(completed_at);
 
@@ -88,13 +86,6 @@ def run_migrations(conn) -> None:
             id         SERIAL PRIMARY KEY,
             fetched_at TIMESTAMPTZ NOT NULL,
             payload    JSONB NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS quote_cache (
-            for_date DATE PRIMARY KEY,
-            text     TEXT NOT NULL,
-            author   TEXT,
-            source   TEXT
         );
 
         CREATE TABLE IF NOT EXISTS quote_pool (
@@ -138,6 +129,25 @@ def run_migrations(conn) -> None:
             notified_at TIMESTAMPTZ
         );
 
+        CREATE TABLE IF NOT EXISTS concept2_results (
+            id              BIGINT PRIMARY KEY,
+            date            TIMESTAMPTZ NOT NULL,
+            type            TEXT,
+            workout_type    TEXT,
+            distance        INT,
+            time_tenths     INT,
+            time_formatted  TEXT,
+            stroke_rate     INT,
+            heart_rate_avg  INT,
+            calories_total  INT,
+            drag_factor     INT,
+            comments        TEXT,
+            raw             JSONB,
+            fetched_at      TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS concept2_results_date_idx
+            ON concept2_results(date);
+
         CREATE TABLE IF NOT EXISTS debug_log (
             id      SERIAL PRIMARY KEY,
             run_id  TEXT NOT NULL,
@@ -147,38 +157,6 @@ def run_migrations(conn) -> None:
         );
         CREATE INDEX IF NOT EXISTS debug_log_run_idx
             ON debug_log(run_id, ts);
-        """)
-
-        cur.execute("""
-        DO $$ BEGIN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_name='tasks' AND table_schema='public'
-            ) AND NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name='tasks_short' AND column_name='id'
-                  AND table_schema='public'
-                LIMIT 1
-            ) THEN
-                NULL;
-            END IF;
-        END $$;
-        """)
-
-        cur.execute("""
-        DO $$ BEGIN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_name='tasks' AND table_schema='public'
-            ) THEN
-                INSERT INTO tasks_short (text)
-                SELECT text FROM tasks
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM tasks_short ts WHERE ts.text = tasks.text
-                );
-                DROP TABLE tasks;
-            END IF;
-        END $$;
         """)
     conn.commit()
 
@@ -554,37 +532,6 @@ def weather_cache_put(conn, payload: dict) -> None:
     conn.commit()
 
 
-def quote_cache_get(conn, for_date: date) -> dict | None:
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("SELECT * FROM quote_cache WHERE for_date = %s", (for_date,))
-        row = cur.fetchone()
-    return dict(row) if row else None
-
-
-def quote_cache_get_recent(conn, max_age_days: int = 7) -> dict | None:
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(
-            "SELECT * FROM quote_cache "
-            "WHERE for_date > CURRENT_DATE - %s::interval "
-            "ORDER BY for_date DESC LIMIT 1",
-            (f"{max_age_days} days",),
-        )
-        row = cur.fetchone()
-    return dict(row) if row else None
-
-
-def quote_cache_put(conn, for_date: date, text: str, author: str | None, source: str) -> None:
-    with conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO quote_cache (for_date, text, author, source) "
-            "VALUES (%s, %s, %s, %s) "
-            "ON CONFLICT (for_date) DO UPDATE SET "
-            "text = EXCLUDED.text, author = EXCLUDED.author, source = EXCLUDED.source",
-            (for_date, text, author, source),
-        )
-    conn.commit()
-
-
 def quote_pool_for_date(conn, for_date: date) -> list[dict]:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
@@ -630,6 +577,85 @@ def quote_pool_prune(conn, days: int = 7) -> None:
             (f"{days} days",),
         )
     conn.commit()
+
+
+def concept2_results_upsert_many(conn, rows: Iterable[dict]) -> int:
+    n = 0
+    with conn.cursor() as cur:
+        for r in rows:
+            cur.execute(
+                "INSERT INTO concept2_results "
+                "(id, date, type, workout_type, distance, time_tenths, "
+                " time_formatted, stroke_rate, heart_rate_avg, calories_total, "
+                " drag_factor, comments, raw, fetched_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
+                "ON CONFLICT (id) DO UPDATE SET "
+                "  date = EXCLUDED.date, "
+                "  type = EXCLUDED.type, "
+                "  workout_type = EXCLUDED.workout_type, "
+                "  distance = EXCLUDED.distance, "
+                "  time_tenths = EXCLUDED.time_tenths, "
+                "  time_formatted = EXCLUDED.time_formatted, "
+                "  stroke_rate = EXCLUDED.stroke_rate, "
+                "  heart_rate_avg = EXCLUDED.heart_rate_avg, "
+                "  calories_total = EXCLUDED.calories_total, "
+                "  drag_factor = EXCLUDED.drag_factor, "
+                "  comments = EXCLUDED.comments, "
+                "  raw = EXCLUDED.raw, "
+                "  fetched_at = NOW()",
+                (
+                    r["id"], r["date"], r.get("type"), r.get("workout_type"),
+                    r.get("distance"), r.get("time_tenths"), r.get("time_formatted"),
+                    r.get("stroke_rate"), r.get("heart_rate_avg"),
+                    r.get("calories_total"), r.get("drag_factor"),
+                    r.get("comments"), Json(r.get("raw") or {}),
+                ),
+            )
+            n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def concept2_results_since(conn, since: datetime) -> list[dict]:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM concept2_results "
+            "WHERE date >= %s ORDER BY date DESC",
+            (since,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def concept2_results_window(conn, start: datetime, end: datetime) -> list[dict]:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM concept2_results "
+            "WHERE date >= %s AND date < %s ORDER BY date DESC",
+            (start, end),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def concept2_lifetime_totals(conn) -> dict:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS n, "
+            "       COALESCE(SUM(distance), 0) AS distance, "
+            "       COALESCE(SUM(time_tenths), 0) AS time_tenths, "
+            "       COALESCE(SUM(calories_total), 0) AS calories, "
+            "       MIN(date) AS first_date, "
+            "       MAX(date) AS last_date "
+            "FROM concept2_results"
+        )
+        row = cur.fetchone()
+    return dict(row) if row else {}
+
+
+def concept2_last_sync_at(conn) -> datetime | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(fetched_at) FROM concept2_results")
+        row = cur.fetchone()
+    return row[0] if row else None
 
 
 def email_already_processed(conn, gmail_msg_id: str) -> bool:

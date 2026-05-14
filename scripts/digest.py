@@ -199,6 +199,12 @@ def _fetch_countdown_ctx(conn, sections: set[str], inbox: dict, now: datetime) -
     return render.shape_countdowns(db.countdowns(conn), now, single)
 
 
+def _fetch_concept2_ctx(conn, sections: set[str], now: datetime) -> dict | None:
+    if "concept2" not in sections:
+        return None
+    return render.shape_concept2(fetchers.fetch_concept2_data(conn, now), now)
+
+
 def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox: dict) -> dict:
     today = now.date()
     profile = db.get_profile(conn)
@@ -253,13 +259,17 @@ def _build_context(conn, tz: ZoneInfo, now: datetime, sections: set[str], inbox:
     if "quote" in sections:
         ctx["quote"] = fetchers.fetch_quote(conn, now)
 
+    c2 = _fetch_concept2_ctx(conn, sections, now)
+    if c2 is not None:
+        ctx["concept2"] = c2
+
     return ctx
 
 
 def _full_sections() -> set[str]:
     return {
         "age", "calendar", "weather", "short", "long", "due",
-        "countdowns", "reflection", "completed", "quote",
+        "countdowns", "reflection", "completed", "concept2", "quote",
     }
 
 

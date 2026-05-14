@@ -308,6 +308,120 @@ def shape_recent_completed(short_rows: list[dict], long_rows: list[dict], now: d
     return out
 
 
+def _c2_format_distance(meters: int | None) -> str:
+    if not meters:
+        return "—"
+    if meters >= 10000:
+        return f"{meters / 1000:.1f} km"
+    if meters >= 1000:
+        return f"{meters / 1000:.2f} km"
+    return f"{meters} m"
+
+
+def _c2_format_time(time_tenths: int | None) -> str:
+    if not time_tenths:
+        return "—"
+    secs = time_tenths // 10
+    h, rem = divmod(secs, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def _c2_format_pace(distance: int | None, time_tenths: int | None) -> str:
+    if not distance or not time_tenths or distance < 100:
+        return ""
+    pace_tenths = round(time_tenths * 500 / distance)
+    secs = pace_tenths // 10
+    m, s = divmod(secs, 60)
+    tenth = pace_tenths % 10
+    return f"{m}:{s:02d}.{tenth}/500m"
+
+
+def _c2_parse_dt(value, tz: ZoneInfo) -> datetime:
+    if isinstance(value, datetime):
+        return value.astimezone(tz) if value.tzinfo else value.replace(tzinfo=tz)
+    return datetime.fromisoformat(str(value)).replace(tzinfo=tz) if value else datetime.now(tz)
+
+
+def _c2_shape_item(r: dict, tz: ZoneInfo) -> dict:
+    dt = _c2_parse_dt(r.get("date"), tz)
+    type_lower = (r.get("type") or "").lower()
+    rate_label = "rpm" if type_lower == "bike" else "spm"
+    return {
+        "date": dt,
+        "date_label": dt.strftime("%a %b %-d"),
+        "distance": _c2_format_distance(r.get("distance")),
+        "time": _c2_format_time(r.get("time_tenths")) or r.get("time_formatted") or "—",
+        "pace": _c2_format_pace(r.get("distance"), r.get("time_tenths")),
+        "stroke_rate": r.get("stroke_rate"),
+        "rate_label": rate_label,
+        "heart_rate_avg": r.get("heart_rate_avg"),
+        "calories": r.get("calories_total"),
+        "comments": (r.get("comments") or "").strip() or None,
+    }
+
+
+def _c2_week_grid(week_raw: list[dict], week_start: date, today: date,
+                   tz: ZoneInfo) -> list[dict]:
+    grid = []
+    for i in range(7):
+        d = week_start + timedelta(days=i)
+        day_rows = [
+            r for r in week_raw
+            if _c2_parse_dt(r.get("date"), tz).date() == d
+        ]
+        total_m = sum((r.get("distance") or 0) for r in day_rows)
+        grid.append({
+            "day": d.strftime("%a"),
+            "count": len(day_rows),
+            "distance": _c2_format_distance(total_m) if total_m else None,
+            "is_today": d == today,
+            "is_future": d > today,
+        })
+    return grid
+
+
+def shape_concept2(data: dict | None, now: datetime) -> dict | None:
+    if not data:
+        return None
+    tz = now.tzinfo or ZoneInfo("UTC")
+    today = now.date()
+    week_start = data.get("week_start") or (today - timedelta(days=today.weekday()))
+
+    week_raw = data.get("week") or []
+    week_grid = _c2_week_grid(week_raw, week_start, today, tz)
+    week_m = sum((r.get("distance") or 0) for r in week_raw)
+    week_t = sum((r.get("time_tenths") or 0) for r in week_raw)
+    week_count = sum(d["count"] for d in week_grid)
+
+    recent_raw = data.get("recent") or []
+    workouts = sorted(
+        (_c2_shape_item(r, tz) for r in recent_raw),
+        key=lambda x: x["date"],
+        reverse=True,
+    )
+    month_m = sum((r.get("distance") or 0) for r in recent_raw)
+    month_t = sum((r.get("time_tenths") or 0) for r in recent_raw)
+    lifetime = data.get("lifetime") or {}
+
+    return {
+        "week_grid": week_grid,
+        "week_count": week_count,
+        "week_distance": _c2_format_distance(week_m),
+        "week_time": _c2_format_time(week_t),
+        "window_days": data.get("window_days", 30),
+        "window_count": len(workouts),
+        "window_distance": _c2_format_distance(month_m),
+        "window_time": _c2_format_time(month_t),
+        "lifetime_count": int(lifetime.get("n") or 0),
+        "lifetime_distance": _c2_format_distance(int(lifetime.get("distance") or 0)),
+        "lifetime_time": _c2_format_time(int(lifetime.get("time_tenths") or 0)),
+        "workouts": workouts,
+    }
+
+
 def render(sections: set[str], context: dict) -> str:
     tpl = Template(TEMPLATE_FILE.read_text())
     ctx = dict(context)

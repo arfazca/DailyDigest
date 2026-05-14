@@ -5,204 +5,279 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Daily Digest</title>
 <style>
-  body { margin:0; padding:24px 12px; background:#f5f1ea;
+  body { margin:0; padding:28px 14px; background:#0b0f1a;
          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-         color:#2a2a2a; line-height:1.5; }
+         color:#dde3f0; line-height:1.55; }
   sup { font-size:0.72em; line-height:0; vertical-align:super; }
-  a { color:#b85c2b; }
-  .container { max-width:620px; margin:0 auto; background:#fff;
-               border-radius:14px; overflow:hidden;
-               box-shadow:0 4px 16px rgba(40,30,15,0.06); }
+  a { color:#60a5fa; }
 
-  .header { padding:28px 32px 22px;
-            background:linear-gradient(180deg,#fdfaf3 0%,#ffffff 100%);
-            border-bottom:1px solid #ece7df; }
-  .date-label { font-size:12px; color:#8a857a; text-transform:uppercase;
-                letter-spacing:1.8px; margin:0 0 6px; font-weight:600; }
-  .date-main { font-size:26px; font-weight:700; color:#1a1a1a; margin:0;
-               letter-spacing:-0.5px; }
+  .container { max-width:620px; margin:0 auto; background:#141c2e;
+               border-radius:16px; overflow:hidden;
+               box-shadow:0 12px 40px rgba(0,0,0,0.55); }
 
-  .section { padding:22px 32px; }
-  .section + .section { border-top:1px solid #f3efe7; }
-  .section-title { font-size:11px; color:#8a857a; text-transform:uppercase;
-                   letter-spacing:1.8px; margin:0 0 14px; font-weight:700; }
+  /* ── Header ───────────────────────────────────────────── */
+  .header { padding:30px 32px 24px;
+            background:linear-gradient(160deg,#1a2540 0%,#121929 100%);
+            border-bottom:1px solid #1e2d45;
+            border-top:3px solid #3b82f6; }
+  .date-label { font-size:12px; color:#6b7a94; text-transform:uppercase;
+                letter-spacing:2px; margin:0 0 6px; font-weight:600; }
+  .date-main  { font-size:28px; font-weight:700; color:#e8edf6; margin:0;
+                letter-spacing:-0.5px; }
 
-  .age-row { margin-top:12px; padding:14px 16px;
-             background:#fbf7ef; border-radius:10px;
-             border-left:3px solid #d9a76b; }
-  .age-line { font-size:14px; color:#2a2a2a; margin:0; }
-  .age-sub  { font-size:12px; color:#6b6860; margin:6px 0 0; }
+  /* ── Sections ─────────────────────────────────────────── */
+  .section { padding:24px 32px; }
+  .section + .section { border-top:1px solid #1e2840; }
+  .section-title { font-size:11px; color:#5a6880; text-transform:uppercase;
+                   letter-spacing:2px; margin:0 0 16px; font-weight:700; }
 
-  .due { padding:12px 14px; border-radius:10px; margin-bottom:8px;
-         font-size:14px; border-left:4px solid transparent; }
-  .due-head { line-height:1.4; }
+  /* ── Age ──────────────────────────────────────────────── */
+  .age-row { padding:16px 18px; background:#1c2538;
+             border-radius:12px; border-left:3px solid #b8963e; }
+  .age-line { font-size:15px; color:#dde3f0; margin:0; }
+  .age-sub  { font-size:13px; color:#8892ac; margin:8px 0 0; }
+
+  /* ── Due dates ────────────────────────────────────────── */
+  .due { padding:14px 16px; border-radius:12px; margin-bottom:10px;
+         font-size:15px; border-left:4px solid transparent; }
+  .due:last-child { margin-bottom:0; }
   .due-label { font-weight:600; }
-  .due-badge { display:inline-block; padding:2px 8px; border-radius:999px;
+  .due-badge { display:inline-block; padding:3px 9px; border-radius:999px;
                font-size:10px; font-weight:700; letter-spacing:0.8px;
                text-transform:uppercase; margin-left:8px;
                vertical-align:middle; white-space:nowrap; }
-  .due-when { font-size:12px; opacity:0.85; margin-top:5px; }
-  .due-green     { background:#e6f4ea; color:#1e6a3a; border-left-color:#2d8a4f; }
-  .due-yellow    { background:#fff8d4; color:#7c5a00; border-left-color:#d4a843; }
-  .due-orange    { background:#fde7d3; color:#8a4a16; border-left-color:#d4742b; }
-  .due-red-orange{ background:#fcd9c7; color:#8a2c0e; border-left-color:#c8492b; }
-  .due-red       { background:#f9d2cf; color:#7a1d11; border-left-color:#a82420; }
-  .due-overdue   { background:#3a1010; color:#fff; border-left-color:#ff5e57; }
-  .due-neutral   { background:#f5f1ea; color:#5a5550; border-left-color:#c5c0b3; }
+  .due-when  { font-size:13px; opacity:0.8; margin-top:6px; }
 
-  .badge-short    { background:rgba(58,110,165,0.16); color:#27517a; }
-  .badge-long     { background:rgba(126,90,158,0.18); color:#5a3d80; }
-  .badge-calendar { background:rgba(184,92,43,0.16); color:#8a4316; }
-  .due-overdue .badge-short    { background:rgba(255,255,255,0.18); color:#fff; }
-  .due-overdue .badge-long     { background:rgba(255,255,255,0.18); color:#fff; }
-  .due-overdue .badge-calendar { background:rgba(255,255,255,0.18); color:#fff; }
+  .due-green      { background:#082918; color:#86efac; border-left-color:#16a34a; }
+  .due-yellow     { background:#1d1a05; color:#fde68a; border-left-color:#ca8a04; }
+  .due-orange     { background:#201408; color:#fdba74; border-left-color:#ea580c; }
+  .due-red-orange { background:#220e08; color:#fca5a5; border-left-color:#dc2626; }
+  .due-red        { background:#1a0808; color:#fca5a5; border-left-color:#b91c1c; }
+  .due-overdue    { background:#180204; color:#ff9090; border-left-color:#ef4444; }
+  .due-neutral    { background:#1a2235; color:#8892ac; border-left-color:#2d3d55; }
 
-  .changes { background:#eef7ef; padding:18px 22px; border-radius:10px;
-             margin-bottom:6px; border-left:3px solid #2d8a4f; }
-  .changes-title { font-size:11px; color:#2d6a4f; text-transform:uppercase;
-                   letter-spacing:1.8px; font-weight:700; margin:0 0 10px; }
-  .change-row { padding:5px 0; font-size:14px; color:#1f4a36; }
-  .change-row.miss { color:#7a1d11; }
+  .badge-short    { background:rgba(59,130,246,0.22); color:#93c5fd; }
+  .badge-long     { background:rgba(167,139,250,0.22); color:#c4b5fd; }
+  .badge-calendar { background:rgba(251,146,60,0.22); color:#fdba74; }
+  .due-overdue .badge-short,
+  .due-overdue .badge-long,
+  .due-overdue .badge-calendar { background:rgba(255,255,255,0.12); color:#dde3f0; }
 
-  .errors { background:#fff5f0; padding:18px 22px; border-radius:10px;
-            margin-top:8px; border:1px solid #f0d0c0; border-left:3px solid #d4742b; }
-  .errors-title { font-size:11px; color:#8a4a16; text-transform:uppercase;
-                  letter-spacing:1.8px; font-weight:700; margin:0 0 10px; }
-  .err-line { background:#ece7df; padding:6px 10px; border-radius:4px;
-              font-family:'SF Mono',Monaco,Consolas,monospace; font-size:12px;
-              color:#5a5550; margin-bottom:4px; }
-  .err-reason { font-size:12px; color:#8a4a16; margin:0 0 10px 4px; }
+  /* ── Changes / errors ─────────────────────────────────── */
+  .changes { background:#0a1f10; padding:18px 20px; border-radius:12px;
+             border-left:3px solid #16a34a; }
+  .changes-title { font-size:11px; color:#86efac; text-transform:uppercase;
+                   letter-spacing:2px; font-weight:700; margin:0 0 10px; }
+  .change-row { padding:5px 0; font-size:14px; color:#a7f3d0; }
+  .change-row.miss { color:#fca5a5; }
 
-  .weather-summary { font-size:14px; color:#2a2a2a; margin:0 0 14px; }
-  .weather-row { padding:8px 0; border-bottom:1px solid #f3efe7;
-                 font-size:13px; line-height:1.45; }
+  .errors { background:#1f0f08; padding:18px 20px; border-radius:12px;
+            border-left:3px solid #dc2626; margin-top:8px; }
+  .errors-title { font-size:11px; color:#fca5a5; text-transform:uppercase;
+                  letter-spacing:2px; font-weight:700; margin:0 0 10px; }
+  .err-line   { background:#2a1810; padding:7px 11px; border-radius:6px;
+                font-family:'SF Mono',Monaco,Consolas,monospace; font-size:12px;
+                color:#e2c8b0; margin-bottom:4px; }
+  .err-reason { font-size:12px; color:#fdba74; margin:0 0 10px 4px; }
+
+  /* ── Weather ──────────────────────────────────────────── */
+  .weather-summary { font-size:14px; color:#8892ac; margin:0 0 14px; }
+  .weather-row { padding:10px 0; border-bottom:1px solid #1e2840;
+                 font-size:14px; line-height:1.5; }
   .weather-row:last-child { border-bottom:none; }
   .weather-time { display:inline-block; font-variant-numeric:tabular-nums;
-                  color:#8a857a; min-width:54px; font-weight:500; }
-  .weather-temp { display:inline-block; font-weight:700; color:#1a1a1a;
-                  min-width:46px; }
-  .weather-desc { color:#4a4540; }
-  .weather-pop  { display:inline-block; margin-left:6px; padding:1px 7px;
-                  border-radius:999px; background:rgba(58,110,165,0.12);
-                  color:#27517a; font-size:11px; font-weight:600;
+                  color:#60a5fa; min-width:54px; font-weight:600; }
+  .weather-temp { display:inline-block; font-weight:700; color:#fbbf24;
+                  min-width:50px; }
+  .weather-desc { color:#b0b8cc; }
+  .weather-pop  { display:inline-block; margin-left:6px; padding:2px 8px;
+                  border-radius:999px; background:rgba(59,130,246,0.2);
+                  color:#93c5fd; font-size:11px; font-weight:600;
                   font-variant-numeric:tabular-nums; }
 
-  .event { padding:11px 0; border-bottom:1px solid #f3efe7; }
+  /* ── Calendar events ──────────────────────────────────── */
+  .event { padding:13px 0; border-bottom:1px solid #1e2840; }
   .event:last-child { border-bottom:none; padding-bottom:0; }
   .event:first-child { padding-top:0; }
-  .event-time { font-size:12px; color:#b85c2b; font-weight:700;
-                font-variant-numeric:tabular-nums; letter-spacing:0.3px; }
-  .event-title { font-size:15px; color:#1a1a1a; margin-top:3px; font-weight:500; }
-  .event-cal   { font-size:11px; color:#6b6860; margin-top:2px;
+  .event-time  { font-size:12px; color:#fb923c; font-weight:700;
+                 font-variant-numeric:tabular-nums; letter-spacing:0.3px; }
+  .event-title { font-size:16px; color:#dde3f0; margin-top:4px; font-weight:500; }
+  .event-cal   { font-size:11px; color:#5a6880; margin-top:3px;
                  text-transform:uppercase; letter-spacing:0.8px; }
-  .event.past .event-time  { text-decoration:line-through; color:#b5b0a5; }
-  .event.past .event-title { text-decoration:line-through; color:#b5b0a5;
-                             font-weight:400; }
-  .event.past .event-cal   { text-decoration:line-through; color:#c5c0b3; }
-  .event.due .event-time   { color:#a82420; }
+  .event.past .event-time  { text-decoration:line-through; color:#2d3a55; }
+  .event.past .event-title { text-decoration:line-through; color:#374151; font-weight:400; }
+  .event.past .event-cal   { text-decoration:line-through; color:#2d3a55; }
+  .event.due .event-time   { color:#ef4444; }
 
-  .task { padding:9px 0; font-size:15px; line-height:1.45;
-          color:#1a1a1a; border-bottom:1px solid #f3efe7; }
+  /* ── Tasks ────────────────────────────────────────────── */
+  .task { padding:11px 0; font-size:16px; line-height:1.5;
+          color:#dde3f0; border-bottom:1px solid #1e2840; }
   .task:last-child { border-bottom:none; padding-bottom:0; }
   .task:first-child { padding-top:0; }
-  .bullet { color:#b85c2b; font-weight:700; margin-right:10px; }
-  .task-due { display:inline-block; font-size:12px; color:#6b6860;
-              margin-left:8px; padding:1px 8px; border-radius:999px;
-              background:#f5f1ea; }
-  .bucket-title { font-size:11px; color:#5a5550; text-transform:uppercase;
-                  letter-spacing:1.4px; font-weight:700; margin:14px 0 8px; }
+  .bullet    { color:#60a5fa; font-weight:700; margin-right:10px; }
+  .task-due  { display:inline-block; font-size:12px; color:#6b7a94;
+               margin-left:8px; padding:2px 9px; border-radius:999px;
+               background:#1a2235; }
+  .bucket-title { font-size:11px; color:#5a6880; text-transform:uppercase;
+                  letter-spacing:1.4px; font-weight:700; margin:16px 0 10px; }
 
-  .long-row { padding:11px 14px; border-radius:10px; margin-bottom:6px;
-              font-size:14px; border-left:4px solid transparent; }
+  .long-row { padding:14px 16px; border-radius:12px; margin-bottom:8px;
+              font-size:15px; border-left:4px solid transparent; }
+  .long-row:last-child { margin-bottom:0; }
   .long-row strong { font-weight:600; }
-  .long-row .when { display:block; font-size:12px; color:#6b6860;
-                    margin-top:5px; }
+  .long-row .when { display:block; font-size:13px; color:#8892ac; margin-top:6px; }
 
-  .countdown { padding:12px 14px; background:#faf8f3; border-radius:10px;
-               margin-bottom:8px; border-left:3px solid #d9a76b; }
-  .countdown-row { line-height:1.4; }
-  .countdown-name { font-weight:600; color:#1a1a1a; font-size:14px; }
-  .countdown-target { font-size:11px; color:#6b6860; margin-top:2px; }
-  .countdown-label { display:inline-block; margin-top:6px;
-                     padding:3px 10px; border-radius:999px;
-                     background:#fff; border:1px solid #e8dcc4;
-                     font-family:'SF Mono',Monaco,Consolas,monospace;
-                     font-size:12px; color:#b85c2b; font-weight:700;
-                     letter-spacing:0.4px; }
+  /* ── Countdown ────────────────────────────────────────── */
+  .countdown { padding:16px 18px; background:#1a1e35;
+               border-radius:12px; margin-bottom:10px;
+               border-left:3px solid #7c6abe; }
+  .countdown:last-child { margin-bottom:0; }
+  .countdown-name   { font-weight:600; color:#dde3f0; font-size:16px; }
+  .countdown-target { font-size:12px; color:#8892ac; margin-top:3px; }
+  .countdown-label  { display:inline-block; margin-top:10px;
+                      padding:4px 12px; border-radius:999px;
+                      background:#141824; border:1px solid #2a2f50;
+                      font-family:'SF Mono',Monaco,Consolas,monospace;
+                      font-size:13px; color:#a78bfa; font-weight:700;
+                      letter-spacing:0.4px; }
 
-  .reflection { padding:12px 14px; background:#f4f0e6; border-radius:10px;
-                margin-bottom:8px; border-left:3px solid #b8a888; }
-  .reflection-text { font-size:14px; color:#2a2a2a; margin:0; }
-  .reflection-meta { font-size:11px; color:#6b6860; margin:6px 0 0;
+  /* ── Reflection ───────────────────────────────────────── */
+  .reflection { padding:16px 18px; background:#1a2228;
+                border-radius:12px; margin-bottom:10px;
+                border-left:3px solid #2d6a8c; }
+  .reflection:last-child { margin-bottom:0; }
+  .reflection-text { font-size:15px; color:#dde3f0; margin:0; }
+  .reflection-meta { font-size:11px; color:#5a6880; margin:8px 0 0;
                      text-transform:uppercase; letter-spacing:1px; }
 
-  .completed-row { padding:8px 0; font-size:14px; line-height:1.45;
-                   border-bottom:1px dashed #ece7df; }
+  /* ── Completed tasks ──────────────────────────────────── */
+  .completed-row { padding:10px 0; font-size:15px; line-height:1.5;
+                   border-bottom:1px dashed #1e2840; }
   .completed-row:last-child { border-bottom:none; padding-bottom:0; }
   .completed-row:first-child { padding-top:0; }
-  .completed-check { color:#2d8a4f; font-weight:700; margin-right:9px;
-                     font-size:14px; }
-  .completed-text { color:#8a8580; text-decoration:line-through; }
+  .completed-check { color:#34d399; font-weight:700; margin-right:9px; }
+  .completed-text  { color:#374151; text-decoration:line-through; }
   .completed-badge { display:inline-block; padding:2px 8px; border-radius:999px;
                      font-size:10px; font-weight:700; letter-spacing:0.8px;
                      text-transform:uppercase; margin-left:6px;
                      vertical-align:middle; white-space:nowrap; }
-  .completed-when { display:inline-block; margin-left:8px; font-size:12px;
-                    color:#9a958a; }
+  .completed-when  { display:inline-block; margin-left:8px; font-size:12px;
+                     color:#374151; }
 
-  .quote { padding:24px 32px; background:#1a1a1a; color:#f5f1ea; }
-  .quote-text { font-style:italic; font-size:15px; line-height:1.65; margin:0; }
-  .quote-author { font-size:12px; color:#b5b0a5; margin:12px 0 0;
+  /* ── Concept2 ─────────────────────────────────────────── */
+  .c2-week-table { width:100%; border-collapse:collapse; margin-bottom:4px; }
+  .c2-day { text-align:center; padding:4px 2px; width:14.28%; }
+  .c2-day-name { display:block; font-size:10px; color:#5a6880;
+                 text-transform:uppercase; letter-spacing:1px;
+                 margin-bottom:8px; font-weight:600; }
+  .c2-day-bubble { display:block; width:38px; height:38px; border-radius:50%;
+                   margin:0 auto; line-height:38px; font-size:15px;
+                   font-weight:700; font-variant-numeric:tabular-nums; }
+  .c2-bubble-zero   { background:#1a2235; color:#2d3d55; }
+  .c2-bubble-active { background:#1e3a6e; color:#60a5fa; }
+  .c2-bubble-today  { background:#1e4080; color:#93c5fd;
+                      box-shadow:0 0 0 2px #3b82f6; }
+  .c2-bubble-future { background:#141c2e; color:#1e2840; }
+  .c2-week-totals { text-align:center; font-size:14px; color:#8892ac;
+                    margin:14px 0 20px; }
+  .c2-week-totals strong { color:#dde3f0; }
+
+  .c2-stats-table { width:100%; border-collapse:separate; border-spacing:8px 0;
+                    margin:0 -8px 20px; }
+  .c2-stat-cell { background:#141e30; border-left:3px solid #2563eb;
+                  border-radius:10px; padding:14px 16px;
+                  vertical-align:top; width:50%; }
+  .c2-stat-title { font-size:10px; color:#5a6880; text-transform:uppercase;
+                   letter-spacing:1.4px; font-weight:700; margin:0 0 10px; }
+  .c2-stat-num  { font-size:22px; font-weight:700; color:#60a5fa;
+                  font-variant-numeric:tabular-nums; line-height:1.2; }
+  .c2-stat-sub  { font-size:12px; color:#8892ac; margin-top:4px;
+                  font-variant-numeric:tabular-nums; }
+
+  .c2-row { padding:12px 0; border-bottom:1px solid #1e2840;
+            font-size:14px; line-height:1.5; }
+  .c2-row:last-child { border-bottom:none; padding-bottom:0; }
+  .c2-row:first-child { padding-top:0; }
+  .c2-date    { font-weight:600; color:#dde3f0; }
+  .c2-metrics { color:#8892ac; margin-top:3px;
+                font-variant-numeric:tabular-nums; }
+  .c2-sep     { color:#2d3d55; margin:0 6px; }
+  .c2-extra   { font-size:12px; color:#5a6880; margin-top:3px; }
+  .c2-comments { font-size:12px; color:#4a5568; font-style:italic; margin-top:3px; }
+
+  /* ── Quote ────────────────────────────────────────────── */
+  .quote { padding:28px 32px; border-top:1px solid #1a2235;
+           background:linear-gradient(135deg,#06090f 0%,#090d18 100%); }
+  .quote-text   { font-style:italic; font-size:15px; line-height:1.7;
+                  color:#b0bcd8; margin:0; }
+  .quote-author { font-size:12px; color:#354060; margin:12px 0 0;
                   text-transform:uppercase; letter-spacing:1.5px; }
 
-  .empty { color:#b5b0a5; font-style:italic; font-size:14px; margin:0; }
+  .empty { color:#374151; font-style:italic; font-size:14px; margin:0; }
 
-  .footer { padding:18px 32px 22px; background:#faf8f3; font-size:12px;
-            color:#6b6860; line-height:1.7;
-            border-top:1px solid #ece7df; }
-  .footer strong { color:#5a5550; display:block; margin-bottom:6px;
-                   font-size:11px; text-transform:uppercase;
-                   letter-spacing:1.2px; }
-  .footer code { background:#ece7df; padding:2px 7px; border-radius:4px;
-                 font-family:'SF Mono',Monaco,Consolas,monospace; font-size:11px;
-                 color:#5a5550; }
+  /* ── Footer ───────────────────────────────────────────── */
+  .footer { padding:20px 32px 24px; background:#0d1321;
+            border-top:1px solid #1a2235; font-size:12px;
+            color:#3d4a62; line-height:1.8; }
+  .footer strong { color:#5a6880; display:block; margin-bottom:6px;
+                   font-size:11px; text-transform:uppercase; letter-spacing:1.2px; }
+  .footer code { background:#1a2235; padding:2px 7px; border-radius:4px;
+                 font-family:'SF Mono',Monaco,Consolas,monospace;
+                 font-size:11px; color:#6b7a94; }
 
+  /* ── Mobile (S21 = 360 css-px) ───────────────────────── */
   @media only screen and (max-width: 520px) {
-    body { padding:16px 8px; }
-    .container { border-radius:12px; }
-    .header   { padding:22px 20px 18px; }
-    .section  { padding:18px 20px; }
-    .quote    { padding:22px 20px; }
-    .footer   { padding:16px 20px 20px; }
-    .date-main { font-size:22px; }
+    body { padding:12px 6px; }
+    .container { border-radius:14px; }
+    .header  { padding:24px 18px 20px; border-top-width:2px; }
+    .section { padding:20px 18px; }
+    .quote   { padding:24px 18px; }
+    .footer  { padding:18px 18px 22px; }
+    .date-main { font-size:24px; }
 
-    .due-badge { display:inline-block; margin-left:0; margin-top:6px; }
-    .due-label { display:block; }
+    /* Due: badge below label on narrow */
+    .due { padding:14px 14px; font-size:15px; }
+    .due-badge  { display:block; margin-left:0; margin-top:7px; width:fit-content; }
+    .due-label  { display:block; }
 
-    .long-row { padding:11px 12px; }
-    .countdown { padding:11px 12px; }
-    .reflection { padding:11px 12px; }
+    /* Task due chip below task */
+    .task-due { display:block; margin-left:26px; margin-top:7px; }
 
-    .task-due { display:block; margin-left:24px; margin-top:6px; }
-
-    .weather-time { min-width:48px; }
+    /* Weather pop on its own line */
+    .weather-pop { margin-left:0; display:block; margin-top:5px;
+                   width:fit-content; }
+    .weather-time { min-width:46px; }
     .weather-temp { min-width:44px; }
-    .weather-pop  { margin-left:0; margin-top:4px; }
 
-    .completed-badge { margin-left:0; margin-top:4px; }
-    .completed-when  { display:block; margin-left:24px; margin-top:3px; }
+    /* Long/countdown/reflection full padding */
+    .long-row   { padding:14px 14px; }
+    .countdown  { padding:16px 14px; }
+    .reflection { padding:16px 14px; }
+
+    /* Countdown label wraps below name */
+    .countdown-label { display:block; margin-top:10px; width:fit-content; }
+
+    /* Completed row */
+    .completed-badge { display:block; margin-left:0; margin-top:5px; }
+    .completed-when  { display:block; margin-left:26px; margin-top:4px; }
+
+    /* C2 week bubbles slightly smaller */
+    .c2-day-bubble { width:34px; height:34px; line-height:34px; font-size:14px; }
+    .c2-stats-table { border-spacing:0; margin:0 0 20px; }
+    .c2-stat-cell   { display:block; width:auto; margin-bottom:10px; }
   }
 </style>
 </head>
 <body>
   <div class="container">
+
     <div class="header">
       <p class="date-label">{{ weekday }} · {{ now_label }}</p>
       <h1 class="date-main">{{ date_long }}</h1>
       {% if 'age' in sections and age %}
-        <div class="age-row">
-          <p class="age-line">You are <strong>{{ age.years }} years, {{ age.months }} months, {{ age.days }} days</strong> old today, {{ age.today_pretty }}.</p>
-          <p class="age-sub">{{ age.to_next_months }} months, {{ age.to_next_days }} days away from turning {{ age.next_age }} ({{ age.to_next_total_days }} days total).</p>
+        <div class="age-row" style="margin-top:14px;">
+          <p class="age-line">You are <strong>{{ age.years }} years, {{ age.months }} months, {{ age.days }} days</strong> old today ({{ age.today_pretty }}).</p>
+          <p class="age-sub">{{ age.to_next_months }} months, {{ age.to_next_days }} days until you turn {{ age.next_age }} &nbsp;({{ age.to_next_total_days }} days total).</p>
         </div>
       {% endif %}
     </div>
@@ -212,10 +287,7 @@
         <p class="section-title">Due within 14 days</p>
         {% for d in dues %}
           <div class="due due-{{ d.color }}">
-            <div class="due-head">
-              <span class="due-label">{{ d.label }}</span>
-              <span class="due-badge badge-{{ d.source }}">{{ d.source_label }}</span>
-            </div>
+            <div><span class="due-label">{{ d.label }}</span><span class="due-badge badge-{{ d.source }}">{{ d.source_label }}</span></div>
             <div class="due-when">{{ d.when }} · {{ d.humanized }}</div>
           </div>
         {% endfor %}
@@ -230,7 +302,7 @@
             <div class="change-row">✓ {{ c }}</div>
           {% endfor %}
           {% for nf in not_found %}
-            <div class="change-row miss">✗ {{ nf }} — not in list</div>
+            <div class="change-row miss">✗ {{ nf }} — not found</div>
           {% endfor %}
         </div>
       </div>
@@ -244,7 +316,7 @@
             <div class="err-line">{{ line }}</div>
             <p class="err-reason">{{ reason }}{% if subj %} (in: {{ subj }}){% endif %}</p>
           {% endfor %}
-          <p class="err-reason">Valid keywords: <code>add</code>, <code>+</code>, <code>done</code>, <code>remove</code>, <code>show</code>. <code>add</code>/<code>done</code>/<code>remove</code> need a quoted "string". <code>show</code> takes a single keyword (calendar, weather, short, long, due, countdown, reflection, quote, grocery, everything).</p>
+          <p class="err-reason">Valid keywords: <code>add</code>, <code>done</code>, <code>show</code>. Use <code>show everything</code> for a full digest.</p>
         </div>
       </div>
     {% endif %}
@@ -253,17 +325,15 @@
       <div class="section">
         <p class="section-title">Weather · rest of today</p>
         <p class="weather-summary">{{ weather.summary }}</p>
-        {% if weather.hourly %}
-          {% for h in weather.hourly %}
-            <div class="weather-row">
-              <span class="weather-time">{{ h.time }}</span>
-              <span class="weather-temp">{{ h.temp }}°C</span>
-              <span class="weather-desc">{{ h.description }}{% if h.precip_pct %} <span class="weather-pop">{{ h.precip_pct }}%</span>{% endif %}</span>
-            </div>
-          {% endfor %}
+        {% for h in weather.hourly %}
+          <div class="weather-row">
+            <span class="weather-time">{{ h.time }}</span>
+            <span class="weather-temp">{{ h.temp }}°C</span>
+            <span class="weather-desc">{{ h.description }}{% if h.precip_pct %}<span class="weather-pop">{{ h.precip_pct }}%</span>{% endif %}</span>
+          </div>
         {% else %}
           <p class="empty">No hourly data available.</p>
-        {% endif %}
+        {% endfor %}
       </div>
     {% elif 'weather' in sections %}
       <div class="section">
@@ -300,7 +370,7 @@
             </div>
           {% endfor %}
         {% else %}
-          <p class="empty">No long-term tasks. Use <code>add long task "X" due &lt;date&gt;</code>.</p>
+          <p class="empty">No long-term tasks. Use <code>add long task "X" due 7 oct 2027</code>.</p>
         {% endif %}
       </div>
     {% endif %}
@@ -311,18 +381,17 @@
         {% if short_tasks.main %}
           {% for t in short_tasks.main %}
             <div class="task">
-              <span class="bullet">○</span><span class="task-text">{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
+              <span class="bullet">○</span><span>{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
             </div>
           {% endfor %}
         {% else %}
           <p class="empty">No short tasks. Use <code>add "your task"</code>.</p>
         {% endif %}
-
         {% for bucket_name, items in short_tasks.buckets.items() %}
           <p class="bucket-title">{{ bucket_name }} bucket</p>
           {% for t in items %}
             <div class="task">
-              <span class="bullet">○</span><span class="task-text">{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
+              <span class="bullet">○</span><span>{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
             </div>
           {% endfor %}
         {% endfor %}
@@ -331,12 +400,12 @@
 
     {% if 'grocery' in sections %}
       <div class="section">
-        <p class="section-title">Grocery bucket</p>
+        <p class="section-title">Grocery</p>
         {% set g = short_tasks.buckets.get('grocery', []) if short_tasks else [] %}
         {% if g %}
           {% for t in g %}
             <div class="task">
-              <span class="bullet">○</span><span class="task-text">{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
+              <span class="bullet">○</span><span>{{ t.text }}</span>
             </div>
           {% endfor %}
         {% else %}
@@ -361,11 +430,9 @@
         <p class="section-title">Countdowns</p>
         {% for c in countdowns %}
           <div class="countdown">
-            <div class="countdown-row">
-              <div class="countdown-name">{{ c.name }}</div>
-              <div class="countdown-target">target: {{ c.target }}</div>
-              <div class="countdown-label">{{ c.label }}</div>
-            </div>
+            <div class="countdown-name">{{ c.name }}</div>
+            <div class="countdown-target">→ {{ c.target }}</div>
+            <div class="countdown-label">{{ c.label }}</div>
           </div>
         {% endfor %}
       </div>
@@ -377,9 +444,78 @@
         {% for r in reflections %}
           <div class="reflection">
             <p class="reflection-text">{{ r.text }}</p>
-            <p class="reflection-meta">{{ r.period }} · clears {{ r.expires_at }} at 11:59 PM</p>
+            <p class="reflection-meta">{{ r.period }} · clears {{ r.expires_at }} 11:59 PM</p>
           </div>
         {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if 'concept2' in sections and concept2 %}
+      <div class="section">
+        <p class="section-title">This week's cycling</p>
+
+        <table class="c2-week-table" cellspacing="0" cellpadding="0">
+          <tr>
+            {% for day in concept2.week_grid %}
+              <td class="c2-day">
+                <span class="c2-day-name">{{ day.day }}</span>
+                <span class="c2-day-bubble
+                  {%- if day.is_future %} c2-bubble-future
+                  {%- elif day.count == 0 and day.is_today %} c2-bubble-today
+                  {%- elif day.is_today and day.count > 0 %} c2-bubble-today
+                  {%- elif day.count > 0 %} c2-bubble-active
+                  {%- else %} c2-bubble-zero{%- endif %}">
+                  {%- if day.is_future %}·{%- else %}{{ day.count }}{%- endif %}
+                </span>
+              </td>
+            {% endfor %}
+          </tr>
+        </table>
+
+        <p class="c2-week-totals">
+          {% if concept2.week_count > 0 %}
+            <strong>{{ concept2.week_count }}</strong> ride{{ '' if concept2.week_count == 1 else 's' }} this week ·
+            <strong>{{ concept2.week_distance }}</strong> · {{ concept2.week_time }}
+          {% else %}
+            No rides logged this week yet.
+          {% endif %}
+        </p>
+
+        <table class="c2-stats-table" cellspacing="0" cellpadding="0">
+          <tr>
+            <td class="c2-stat-cell">
+              <p class="c2-stat-title">Last {{ concept2.window_days }} days</p>
+              <div class="c2-stat-num">{{ concept2.window_count }}</div>
+              <div class="c2-stat-sub">{{ concept2.window_distance }} · {{ concept2.window_time }}</div>
+            </td>
+            <td class="c2-stat-cell">
+              <p class="c2-stat-title">Lifetime</p>
+              <div class="c2-stat-num">{{ concept2.lifetime_count }}</div>
+              <div class="c2-stat-sub">{{ concept2.lifetime_distance }} · {{ concept2.lifetime_time }}</div>
+            </td>
+          </tr>
+        </table>
+
+        {% if concept2.workouts %}
+          {% for w in concept2.workouts %}
+            <div class="c2-row">
+              <div class="c2-date">{{ w.date_label }}</div>
+              <div class="c2-metrics">
+                {{ w.distance }}<span class="c2-sep">·</span>{{ w.time }}{% if w.pace %}<span class="c2-sep">·</span>{{ w.pace }}{% endif %}
+              </div>
+              {% if w.stroke_rate or w.heart_rate_avg or w.calories %}
+                <div class="c2-extra">
+                  {%- if w.stroke_rate %}{{ w.stroke_rate }} {{ w.rate_label }}{% endif %}
+                  {%- if w.heart_rate_avg %}{% if w.stroke_rate %} · {% endif %}{{ w.heart_rate_avg }} bpm avg{% endif %}
+                  {%- if w.calories %}{% if w.stroke_rate or w.heart_rate_avg %} · {% endif %}{{ w.calories }} cal{% endif %}
+                </div>
+              {% endif %}
+              {% if w.comments %}<div class="c2-comments">"{{ w.comments }}"</div>{% endif %}
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="empty">No rides in the last {{ concept2.window_days }} days.</p>
+        {% endif %}
       </div>
     {% endif %}
 
@@ -393,10 +529,10 @@
     <div class="footer">
       <strong>Quick commands</strong>
       <code>add "task"</code> · <code>add "milk" #grocery</code> · <code>add long task "X" due 7 oct 2027</code><br>
-      <code>add countdown "M license" 2027-10-07</code> · <code>add reflection for week "topic"</code><br>
-      <code>done "task"</code> · <code>show calendar / weather / short / long / due / countdown "name"</code><br>
-      Full reference in <code>docs/commands.md</code>.
+      <code>add countdown "event" 2027-10-07</code> · <code>add reflection for week "topic"</code><br>
+      <code>done "task"</code> · <code>show calendar / weather / short / long / due / everything</code>
     </div>
+
   </div>
 </body>
 </html>
