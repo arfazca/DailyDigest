@@ -1,157 +1,333 @@
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Daily Digest Example</title>
-<style>
-  body {
-    margin: 0;
-    padding: 24px 12px;
-    background-color: #f5f1ea;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    color: #2a2a2a;
-    line-height: 1.5;
-  }
-  .container {
-    max-width: 560px;
-    margin: 0 auto;
-    background: #ffffff;
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  }
-  .header {
-    padding: 28px 32px 22px;
-    border-bottom: 1px solid #ece7df;
-  }
-  .date-label {
-    font-size: 12px;
-    color: #8a8579;
-    text-transform: uppercase;
-    letter-spacing: 1.8px;
-    margin: 0 0 6px;
-    font-weight: 600;
-  }
-  .date-main {
-    font-size: 26px;
-    font-weight: 700;
-    color: #1a1a1a;
-    margin: 0;
-    letter-spacing: -0.5px;
-  }
-  .section {
-    padding: 22px 32px;
-  }
-  .section + .section {
-    border-top: 1px solid #f3efe7;
-  }
-  .section-title {
-    font-size: 11px;
-    color: #8a8579;
-    text-transform: uppercase;
-    letter-spacing: 1.8px;
-    margin: 0 0 14px;
-    font-weight: 700;
-  }
-  .event {
-    padding: 11px 0;
-    border-bottom: 1px solid #f3efe7;
-  }
-  .event:last-child { border-bottom: none; padding-bottom: 0; }
-  .event:first-child { padding-top: 0; }
-  .event-time {
-    font-size: 12px;
-    color: #b85c2b;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.3px;
-  }
-  .event-title {
-    font-size: 15px;
-    color: #1a1a1a;
-    margin-top: 3px;
-    font-weight: 500;
-  }
-  .task {
-    padding: 9px 0;
-    font-size: 15px;
-    color: #1a1a1a;
-    border-bottom: 1px solid #f3efe7;
-  }
-  .task:last-child { border-bottom: none; padding-bottom: 0; }
-  .task:first-child { padding-top: 0; }
-  .bullet {
-    color: #b85c2b;
-    font-weight: 700;
-    margin-right: 10px;
-  }
-  .footer {
-    padding: 18px 32px 22px;
-    background: #faf8f3;
-    font-size: 12px;
-    color: #8a8579;
-    line-height: 1.7;
-  }
-  .footer strong {
-    color: #5a5550;
-    display: block;
-    margin-bottom: 6px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-  }
-  .footer code {
-    background: #ece7df;
-    padding: 2px 7px;
-    border-radius: 4px;
-    font-family: 'SF Mono', Monaco, Consolas, monospace;
-    font-size: 11px;
-    color: #5a5550;
-  }
-</style>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Digest</title>
+<style>@media only screen and (max-width: 520px) {
+    body {
+        padding: 16px 8px
+        }
+    .container {
+        border-radius: 12px
+        }
+    .header {
+        padding: 22px 20px 18px
+        }
+    .section {
+        padding: 18px 20px
+        }
+    .quote {
+        padding: 22px 20px
+        }
+    .footer {
+        padding: 16px 20px 20px
+        }
+    .date-main {
+        font-size: 22px
+        }
+    .due-badge {
+        display: inline-block;
+        margin-left: 0;
+        margin-top: 6px
+        }
+    .due-label {
+        display: block
+        }
+    .long-row {
+        padding: 11px 12px
+        }
+    .countdown {
+        padding: 11px 12px
+        }
+    .reflection {
+        padding: 11px 12px
+        }
+    .task-due {
+        display: block;
+        margin-left: 24px;
+        margin-top: 6px
+        }
+    .weather-time {
+        min-width: 48px
+        }
+    .weather-temp {
+        min-width: 44px
+        }
+    .weather-pop {
+        margin-left: 0;
+        margin-top: 4px
+        }
+    .completed-badge {
+        margin-left: 0;
+        margin-top: 4px
+        }
+    .completed-when {
+        display: block;
+        margin-left: 24px;
+        margin-top: 3px
+        }
+    }</style>
 </head>
-<body>
-  <div class="container">
-    <div class="header">
-      <p class="date-label">Monday</p>
-      <h1 class="date-main">May 12, 2026</h1>
+<body style='margin:0; padding:24px 12px; background:#f5f1ea; font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color:#2a2a2a; line-height:1.5'>
+  <div class="container" style="max-width:620px; margin:0 auto; background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 4px 16px rgba(40, 30, 15, 0.06)">
+    <div class="header" style="padding:28px 32px 22px; background:linear-gradient(180deg, #fdfaf3 0%, #fff 100%); border-bottom:1px solid #ece7df">
+      <p class="date-label" style="font-size:12px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 6px; font-weight:600">Thursday · 9:12 AM</p>
+      <h1 class="date-main" style="font-size:26px; font-weight:700; color:#1a1a1a; margin:0; letter-spacing:-0.5px">May 14<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup>, 2026</h1>
+      
+        <div class="age-row" style="margin-top:12px; padding:14px 16px; background:#fbf7ef; border-radius:10px; border-left:3px solid #d9a76b">
+          <p class="age-line" style="font-size:14px; color:#2a2a2a; margin:0">You are <strong>23 years, 10 months, 29 days</strong> old today, May 14, 2026.</p>
+          <p class="age-sub" style="font-size:12px; color:#6b6860; margin:6px 0 0">1 months, 1 days away from turning 24 (32 days total).</p>
+        </div>
+      
     </div>
 
-    <div class="section">
-      <p class="section-title">Today's Schedule</p>
-      <div class="event">
-        <div class="event-time">9:00 am</div>
-        <div class="event-title">Team standup</div>
+    
+      <div class="section" style="padding:22px 32px">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">Due within 14 days</p>
+        
+          <div class="due due-red" style="padding:12px 14px; border-radius:10px; margin-bottom:8px; font-size:14px; border-left:4px solid transparent; background:#f9d2cf; color:#7a1d11; border-left-color:#a82420">
+            <div class="due-head" style="line-height:1.4">
+              <span class="due-label" style="font-weight:600">Assignment 3 Due</span>
+              <span class="due-badge badge-calendar" style="display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; margin-left:8px; vertical-align:middle; white-space:nowrap; background:rgba(184, 92, 43, 0.16); color:#8a4316" valign="middle">Calendar</span>
+            </div>
+            <div class="due-when" style="font-size:12px; opacity:0.85; margin-top:5px">Thursday May 14<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup> 11:59 PM · today</div>
+          </div>
+        
+          <div class="due due-red" style="padding:12px 14px; border-radius:10px; margin-bottom:8px; font-size:14px; border-left:4px solid transparent; background:#f9d2cf; color:#7a1d11; border-left-color:#a82420">
+            <div class="due-head" style="line-height:1.4">
+              <span class="due-label" style="font-weight:600">submit timesheet that has a very long name to test wrapping</span>
+              <span class="due-badge badge-short" style="display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; margin-left:8px; vertical-align:middle; white-space:nowrap; background:rgba(58, 110, 165, 0.16); color:#27517a" valign="middle">Short task</span>
+            </div>
+            <div class="due-when" style="font-size:12px; opacity:0.85; margin-top:5px">Saturday May 16<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup> 5:00 PM · in 2 days</div>
+          </div>
+        
+          <div class="due due-red-orange" style="padding:12px 14px; border-radius:10px; margin-bottom:8px; font-size:14px; border-left:4px solid transparent; background:#fcd9c7; color:#8a2c0e; border-left-color:#c8492b">
+            <div class="due-head" style="line-height:1.4">
+              <span class="due-label" style="font-weight:600">Study Permit Extension Deadline</span>
+              <span class="due-badge badge-long" style="display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; margin-left:8px; vertical-align:middle; white-space:nowrap; background:rgba(126, 90, 158, 0.18); color:#5a3d80" valign="middle">Long task</span>
+            </div>
+            <div class="due-when" style="font-size:12px; opacity:0.85; margin-top:5px">Sunday May 17<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup> · in 3 days</div>
+          </div>
+        
       </div>
-      <div class="event">
-        <div class="event-time">10:30 am</div>
-        <div class="event-title">1:1 with manager</div>
-      </div>
-      <div class="event">
-        <div class="event-time">2:00 pm</div>
-        <div class="event-title">Code review session</div>
-      </div>
-      <div class="event">
-        <div class="event-time">All day</div>
-        <div class="event-title">Marathon training week</div>
-      </div>
-    </div>
+    
 
-    <div class="section">
-      <p class="section-title">Tasks</p>
-      <div class="task"><span class="bullet">○</span>Pick up groceries</div>
-      <div class="task"><span class="bullet">○</span>Reply to client email</div>
-      <div class="task"><span class="bullet">○</span>Review PR #284</div>
-      <div class="task"><span class="bullet">○</span>Book dentist appointment</div>
-    </div>
+    
+      <div class="section" style="padding:22px 32px; border-top:1px solid #f3efe7">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">What changed</p>
+        <div class="changes" style="background:#eef7ef; padding:18px 22px; border-radius:10px; margin-bottom:6px; border-left:3px solid #2d8a4f">
+          
+            <div class="change-row" style="padding:5px 0; font-size:14px; color:#1f4a36">✓ added: buy detergent</div>
+          
+            <div class="change-row" style="padding:5px 0; font-size:14px; color:#1f4a36">✓ removed: call dentist</div>
+          
+          
+            <div class="change-row miss" style="padding:5px 0; font-size:14px; color:#7a1d11">✗ unicorns — not in list</div>
+          
+        </div>
+      </div>
+    
 
-    <div class="footer">
-      <strong>Reply to edit your list</strong>
-      <code>add: walk the dog</code> &nbsp;adds a task<br>
-      <code>done: walk the dog</code> &nbsp;removes a matching task<br>
-      <code>clear</code> &nbsp;empties the list<br>
-      Or send a bullet list (<code>- item</code>) to replace everything.
+    
+
+    
+      <div class="section" style="padding:22px 32px; border-top:1px solid #f3efe7">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">Weather · rest of today</p>
+        <p class="weather-summary" style="font-size:14px; color:#2a2a2a; margin:0 0 14px">Mostly 13°C, broken clouds.</p>
+        
+          
+            <div class="weather-row" style="padding:8px 0; border-bottom:1px solid #f3efe7; font-size:13px; line-height:1.45">
+              <span class="weather-time" style="display:inline-block; font-variant-numeric:tabular-nums; color:#8a857a; min-width:54px; font-weight:500">5 am</span>
+              <span class="weather-temp" style="display:inline-block; font-weight:700; color:#1a1a1a; min-width:46px">11°C</span>
+              <span class="weather-desc" style="color:#4a4540">broken clouds</span>
+            </div>
+          
+            <div class="weather-row" style="padding:8px 0; border-bottom:1px solid #f3efe7; font-size:13px; line-height:1.45">
+              <span class="weather-time" style="display:inline-block; font-variant-numeric:tabular-nums; color:#8a857a; min-width:54px; font-weight:500">8 am</span>
+              <span class="weather-temp" style="display:inline-block; font-weight:700; color:#1a1a1a; min-width:46px">11°C</span>
+              <span class="weather-desc" style="color:#4a4540">broken clouds</span>
+            </div>
+          
+            <div class="weather-row" style="padding:8px 0; border-bottom:1px solid #f3efe7; font-size:13px; line-height:1.45">
+              <span class="weather-time" style="display:inline-block; font-variant-numeric:tabular-nums; color:#8a857a; min-width:54px; font-weight:500">11 am</span>
+              <span class="weather-temp" style="display:inline-block; font-weight:700; color:#1a1a1a; min-width:46px">13°C</span>
+              <span class="weather-desc" style="color:#4a4540">scattered clouds <span class="weather-pop" style="display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; background:rgba(58, 110, 165, 0.12); color:#27517a; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums">5%</span></span>
+            </div>
+          
+            <div class="weather-row" style="padding:8px 0; border-bottom:1px solid #f3efe7; font-size:13px; line-height:1.45">
+              <span class="weather-time" style="display:inline-block; font-variant-numeric:tabular-nums; color:#8a857a; min-width:54px; font-weight:500">2 pm</span>
+              <span class="weather-temp" style="display:inline-block; font-weight:700; color:#1a1a1a; min-width:46px">14°C</span>
+              <span class="weather-desc" style="color:#4a4540">overcast clouds <span class="weather-pop" style="display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; background:rgba(58, 110, 165, 0.12); color:#27517a; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums">10%</span></span>
+            </div>
+          
+            <div class="weather-row" style="padding:8px 0; border-bottom:1px solid #f3efe7; font-size:13px; line-height:1.45">
+              <span class="weather-time" style="display:inline-block; font-variant-numeric:tabular-nums; color:#8a857a; min-width:54px; font-weight:500">5 pm</span>
+              <span class="weather-temp" style="display:inline-block; font-weight:700; color:#1a1a1a; min-width:46px">16°C</span>
+              <span class="weather-desc" style="color:#4a4540">broken clouds</span>
+            </div>
+          
+            <div class="weather-row" style="padding:8px 0; border-bottom:1px solid #f3efe7; font-size:13px; line-height:1.45">
+              <span class="weather-time" style="display:inline-block; font-variant-numeric:tabular-nums; color:#8a857a; min-width:54px; font-weight:500">8 pm</span>
+              <span class="weather-temp" style="display:inline-block; font-weight:700; color:#1a1a1a; min-width:46px">11°C</span>
+              <span class="weather-desc" style="color:#4a4540">clear sky</span>
+            </div>
+          
+            <div class="weather-row" style="padding:8px 0; border-bottom:none; font-size:13px; line-height:1.45">
+              <span class="weather-time" style="display:inline-block; font-variant-numeric:tabular-nums; color:#8a857a; min-width:54px; font-weight:500">11 pm</span>
+              <span class="weather-temp" style="display:inline-block; font-weight:700; color:#1a1a1a; min-width:46px">10°C</span>
+              <span class="weather-desc" style="color:#4a4540">light rain <span class="weather-pop" style="display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px; background:rgba(58, 110, 165, 0.12); color:#27517a; font-size:11px; font-weight:600; font-variant-numeric:tabular-nums">20%</span></span>
+            </div>
+          
+        
+      </div>
+    
+
+    
+      <div class="section" style="padding:22px 32px; border-top:1px solid #f3efe7">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">Today's timeline</p>
+        
+          
+            <div class="event past" style="padding:11px 0; border-bottom:1px solid #f3efe7">
+              <div class="event-time" style="font-size:12px; color:#b5b0a5; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0.3px; text-decoration:line-through">8:00 am</div>
+              <div class="event-title" style="font-size:15px; color:#b5b0a5; margin-top:3px; font-weight:400; text-decoration:line-through">Morning standup</div>
+              <div class="event-cal" style="font-size:11px; color:#c5c0b3; margin-top:2px; text-transform:uppercase; letter-spacing:0.8px; text-decoration:line-through">Work</div>
+            </div>
+          
+            <div class="event" style="padding:11px 0; border-bottom:1px solid #f3efe7">
+              <div class="event-time" style="font-size:12px; color:#b85c2b; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0.3px">10:30 am</div>
+              <div class="event-title" style="font-size:15px; color:#1a1a1a; margin-top:3px; font-weight:500">Math 200 Lecture</div>
+              <div class="event-cal" style="font-size:11px; color:#6b6860; margin-top:2px; text-transform:uppercase; letter-spacing:0.8px">UVic</div>
+            </div>
+          
+            <div class="event due" style="padding:11px 0; border-radius:10px; margin-bottom:8px; font-size:14px; border-left:4px solid transparent; border-bottom:none; padding-bottom:0">
+              <div class="event-time" style="font-size:12px; color:#a82420; font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0.3px">11:59 pm · DUE</div>
+              <div class="event-title" style="font-size:15px; color:#1a1a1a; margin-top:3px; font-weight:500">Assignment 3 Due</div>
+              <div class="event-cal" style="font-size:11px; color:#6b6860; margin-top:2px; text-transform:uppercase; letter-spacing:0.8px">UVic</div>
+            </div>
+          
+        
+      </div>
+    
+
+    
+      <div class="section" style="padding:22px 32px; border-top:1px solid #f3efe7">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">Long-term tasks</p>
+        
+          
+            <div class="long-row due-red-orange" style="background:#fcd9c7; color:#8a2c0e; border-left-color:#c8492b; padding:11px 14px; border-radius:10px; margin-bottom:6px; font-size:14px; border-left:4px solid transparent">
+              <strong style="font-weight:600">Study Permit Extension Deadline</strong>
+              <span class="when" style="display:block; font-size:12px; color:#6b6860; margin-top:5px">Sunday May 17<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup>, 2026 · in 3 days</span>
+            </div>
+          
+            <div class="long-row due-neutral" style="background:#f5f1ea; color:#5a5550; border-left-color:#c5c0b3; padding:11px 14px; border-radius:10px; margin-bottom:6px; font-size:14px; border-left:4px solid transparent">
+              <strong style="font-weight:600">tax return filing</strong>
+              <span class="when" style="display:block; font-size:12px; color:#6b6860; margin-top:5px">Wednesday June 3<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">rd</sup>, 2026 · in 20 days</span>
+            </div>
+          
+        
+      </div>
+    
+
+    
+      <div class="section" style="padding:22px 32px; border-top:1px solid #f3efe7">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">Short-term tasks</p>
+        
+          
+            <div class="task" style="padding:9px 0; font-size:15px; line-height:1.45; color:#1a1a1a; border-bottom:1px solid #f3efe7">
+              <span class="bullet" style="color:#b85c2b; font-weight:700; margin-right:10px">○</span><span class="task-text">buy detergent</span>
+            </div>
+          
+            <div class="task" style="padding:9px 0; font-size:15px; line-height:1.45; color:#1a1a1a; border-bottom:1px solid #f3efe7">
+              <span class="bullet" style="color:#b85c2b; font-weight:700; margin-right:10px">○</span><span class="task-text">submit timesheet that has a very long name to test wrapping</span><span class="task-due" style="display:inline-block; font-size:12px; color:#6b6860; margin-left:8px; padding:1px 8px; border-radius:999px; background:#f5f1ea">due Saturday May 16<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup> 5:00 PM</span>
+            </div>
+          
+        
+
+        
+          <p class="bucket-title" style="font-size:11px; color:#5a5550; text-transform:uppercase; letter-spacing:1.4px; font-weight:700; margin:14px 0 8px">grocery bucket</p>
+          
+            <div class="task" style="padding:9px 0; font-size:15px; line-height:1.45; color:#1a1a1a; border-bottom:1px solid #f3efe7">
+              <span class="bullet" style="color:#b85c2b; font-weight:700; margin-right:10px">○</span><span class="task-text">milk</span>
+            </div>
+          
+            <div class="task" style="padding:9px 0; font-size:15px; line-height:1.45; color:#1a1a1a; border-bottom:none; padding-bottom:0">
+              <span class="bullet" style="color:#b85c2b; font-weight:700; margin-right:10px">○</span><span class="task-text">eggs</span>
+            </div>
+          
+        
+      </div>
+    
+
+    
+
+    
+      <div class="section" style="padding:22px 32px; border-top:1px solid #f3efe7">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">Recently completed · last 3 days</p>
+        
+          <div class="completed-row" style="padding:8px 0; font-size:14px; line-height:1.45; border-bottom:1px dashed #ece7df">
+            <span class="completed-check" style="color:#2d8a4f; font-weight:700; margin-right:9px; font-size:14px">✓</span><span class="completed-text" style="color:#8a8580; text-decoration:line-through">call dentist</span><span class="completed-badge badge-short" style="background:rgba(58, 110, 165, 0.16); color:#27517a; display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; margin-left:6px; vertical-align:middle; white-space:nowrap" valign="middle">short</span><span class="completed-when" style="display:inline-block; margin-left:8px; font-size:12px; color:#9a958a">today, 5:12 am</span>
+          </div>
+        
+          <div class="completed-row" style="padding:8px 0; font-size:14px; line-height:1.45; border-bottom:1px dashed #ece7df">
+            <span class="completed-check" style="color:#2d8a4f; font-weight:700; margin-right:9px; font-size:14px">✓</span><span class="completed-text" style="color:#8a8580; text-decoration:line-through">pick up package</span><span class="completed-badge badge-short" style="background:rgba(58, 110, 165, 0.16); color:#27517a; display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; margin-left:6px; vertical-align:middle; white-space:nowrap" valign="middle">short</span><span class="completed-when" style="display:inline-block; margin-left:8px; font-size:12px; color:#9a958a">yesterday, 7:12 am</span>
+          </div>
+        
+          <div class="completed-row" style="padding:8px 0; font-size:14px; line-height:1.45; border-bottom:none; padding-bottom:0">
+            <span class="completed-check" style="color:#2d8a4f; font-weight:700; margin-right:9px; font-size:14px">✓</span><span class="completed-text" style="color:#8a8580; text-decoration:line-through">submit travel reimbursement</span><span class="completed-badge badge-long" style="background:rgba(126, 90, 158, 0.18); color:#5a3d80; display:inline-block; padding:2px 8px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; margin-left:6px; vertical-align:middle; white-space:nowrap" valign="middle">long</span><span class="completed-when" style="display:inline-block; margin-left:8px; font-size:12px; color:#9a958a">2 days ago</span>
+          </div>
+        
+      </div>
+    
+
+    
+      <div class="section" style="padding:22px 32px; border-top:1px solid #f3efe7">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">Countdowns</p>
+        
+          <div class="countdown" style="padding:12px 14px; background:#faf8f3; border-radius:10px; margin-bottom:8px; border-left:3px solid #d9a76b">
+            <div class="countdown-row" style="line-height:1.4">
+              <div class="countdown-name" style="font-weight:600; color:#1a1a1a; font-size:14px">M license exam</div>
+              <div class="countdown-target" style="font-size:11px; color:#6b6860; margin-top:2px">target: Tuesday November 10<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup>, 2026 9:12 AM</div>
+              <div class="countdown-label" style='display:inline-block; margin-top:6px; padding:3px 10px; border-radius:999px; background:#fff; border:1px solid #e8dcc4; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:12px; color:#b85c2b; font-weight:700; letter-spacing:0.4px'>6mo</div>
+            </div>
+          </div>
+        
+          <div class="countdown" style="padding:12px 14px; background:#faf8f3; border-radius:10px; margin-bottom:8px; border-left:3px solid #d9a76b">
+            <div class="countdown-row" style="line-height:1.4">
+              <div class="countdown-name" style="font-weight:600; color:#1a1a1a; font-size:14px">Graduation</div>
+              <div class="countdown-target" style="font-size:11px; color:#6b6860; margin-top:2px">target: Thursday July 8<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup>, 2027 9:12 AM</div>
+              <div class="countdown-label" style='display:inline-block; margin-top:6px; padding:3px 10px; border-radius:999px; background:#fff; border:1px solid #e8dcc4; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:12px; color:#b85c2b; font-weight:700; letter-spacing:0.4px'>1y 1mo</div>
+            </div>
+          </div>
+        
+      </div>
+    
+
+    
+      <div class="section" style="padding:22px 32px; border-top:1px solid #f3efe7">
+        <p class="section-title" style="font-size:11px; color:#8a857a; text-transform:uppercase; letter-spacing:1.8px; margin:0 0 14px; font-weight:700">Reflections</p>
+        
+          <div class="reflection" style="padding:12px 14px; background:#f4f0e6; border-radius:10px; margin-bottom:8px; border-left:3px solid #b8a888">
+            <p class="reflection-text" style="font-size:14px; color:#2a2a2a; margin:0">lift 3× weekly</p>
+            <p class="reflection-meta" style="font-size:11px; color:#6b6860; margin:6px 0 0; text-transform:uppercase; letter-spacing:1px">month · clears Sunday May 24<sup style="font-size:0.72em; line-height:0; vertical-align:super" valign="super">th</sup>, 2026 at 11:59 PM</p>
+          </div>
+        
+      </div>
+    
+
+    
+      <div class="quote" style="padding:24px 32px; background:#1a1a1a; color:#f5f1ea">
+        <p class="quote-text" style="font-style:italic; font-size:15px; line-height:1.65; margin:0">"What we know is a drop; what we do not know is an ocean."</p>
+        <p class="quote-author" style="font-size:12px; color:#b5b0a5; margin:12px 0 0; text-transform:uppercase; letter-spacing:1.5px">— Isaac Newton</p>
+      </div>
+    
+
+    <div class="footer" style="padding:18px 32px 22px; background:#faf8f3; font-size:12px; color:#6b6860; line-height:1.7; border-top:1px solid #ece7df">
+      <strong style="color:#5a5550; display:block; margin-bottom:6px; font-size:11px; text-transform:uppercase; letter-spacing:1.2px">Quick commands</strong>
+      <code style='background:#ece7df; padding:2px 7px; border-radius:4px; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:11px; color:#5a5550'>add "task"</code> · <code style='background:#ece7df; padding:2px 7px; border-radius:4px; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:11px; color:#5a5550'>add "milk" #grocery</code> · <code style='background:#ece7df; padding:2px 7px; border-radius:4px; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:11px; color:#5a5550'>add long task "X" due 7 oct 2027</code><br>
+      <code style='background:#ece7df; padding:2px 7px; border-radius:4px; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:11px; color:#5a5550'>add countdown "M license" 2027-10-07</code> · <code style='background:#ece7df; padding:2px 7px; border-radius:4px; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:11px; color:#5a5550'>add reflection for week "topic"</code><br>
+      <code style='background:#ece7df; padding:2px 7px; border-radius:4px; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:11px; color:#5a5550'>done "task"</code> · <code style='background:#ece7df; padding:2px 7px; border-radius:4px; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:11px; color:#5a5550'>show calendar / weather / short / long / due / countdown "name"</code><br>
+      Full reference in <code style='background:#ece7df; padding:2px 7px; border-radius:4px; font-family:"SF Mono", Monaco, Consolas, monospace; font-size:11px; color:#5a5550'>docs/commands.md</code>.
     </div>
   </div>
 </body>

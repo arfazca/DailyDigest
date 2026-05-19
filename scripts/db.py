@@ -45,21 +45,27 @@ def run_migrations(conn) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS tasks_short (
-            id          SERIAL PRIMARY KEY,
-            text        TEXT NOT NULL,
-            bucket      TEXT,
-            due_at      TIMESTAMPTZ,
-            created_at  TIMESTAMPTZ DEFAULT NOW(),
-            updated_at  TIMESTAMPTZ DEFAULT NOW()
+            id            SERIAL PRIMARY KEY,
+            text          TEXT NOT NULL,
+            bucket        TEXT,
+            due_at        TIMESTAMPTZ,
+            completed_at  TIMESTAMPTZ,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            updated_at    TIMESTAMPTZ DEFAULT NOW()
         );
+        CREATE INDEX IF NOT EXISTS tasks_short_completed_idx
+            ON tasks_short(completed_at);
 
         CREATE TABLE IF NOT EXISTS tasks_long (
-            id          SERIAL PRIMARY KEY,
-            text        TEXT NOT NULL,
-            due_date    DATE NOT NULL,
-            created_at  TIMESTAMPTZ DEFAULT NOW(),
-            updated_at  TIMESTAMPTZ DEFAULT NOW()
+            id            SERIAL PRIMARY KEY,
+            text          TEXT NOT NULL,
+            due_date      DATE NOT NULL,
+            completed_at  TIMESTAMPTZ,
+            created_at    TIMESTAMPTZ DEFAULT NOW(),
+            updated_at    TIMESTAMPTZ DEFAULT NOW()
         );
+        CREATE INDEX IF NOT EXISTS tasks_long_completed_idx
+            ON tasks_long(completed_at);
 
         CREATE TABLE IF NOT EXISTS countdowns (
             id              SERIAL PRIMARY KEY,
@@ -82,12 +88,17 @@ def run_migrations(conn) -> None:
             payload    JSONB NOT NULL
         );
 
-        CREATE TABLE IF NOT EXISTS quote_cache (
-            for_date DATE PRIMARY KEY,
-            text     TEXT NOT NULL,
-            author   TEXT,
-            source   TEXT
+        CREATE TABLE IF NOT EXISTS quote_pool (
+            id         SERIAL PRIMARY KEY,
+            for_date   DATE NOT NULL,
+            text       TEXT NOT NULL,
+            author     TEXT,
+            source     TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            UNIQUE (for_date, text)
         );
+        CREATE INDEX IF NOT EXISTS quote_pool_date_idx
+            ON quote_pool(for_date);
 
         CREATE TABLE IF NOT EXISTS events_cache (
             id          SERIAL PRIMARY KEY,
@@ -118,6 +129,25 @@ def run_migrations(conn) -> None:
             notified_at TIMESTAMPTZ
         );
 
+        CREATE TABLE IF NOT EXISTS concept2_results (
+            id              BIGINT PRIMARY KEY,
+            date            TIMESTAMPTZ NOT NULL,
+            type            TEXT,
+            workout_type    TEXT,
+            distance        INT,
+            time_tenths     INT,
+            time_formatted  TEXT,
+            stroke_rate     INT,
+            heart_rate_avg  INT,
+            calories_total  INT,
+            drag_factor     INT,
+            comments        TEXT,
+            raw             JSONB,
+            fetched_at      TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS concept2_results_date_idx
+            ON concept2_results(date);
+
         CREATE TABLE IF NOT EXISTS debug_log (
             id      SERIAL PRIMARY KEY,
             run_id  TEXT NOT NULL,
@@ -127,38 +157,6 @@ def run_migrations(conn) -> None:
         );
         CREATE INDEX IF NOT EXISTS debug_log_run_idx
             ON debug_log(run_id, ts);
-        """)
-
-        cur.execute("""
-        DO $$ BEGIN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_name='tasks' AND table_schema='public'
-            ) AND NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name='tasks_short' AND column_name='id'
-                  AND table_schema='public'
-                LIMIT 1
-            ) THEN
-                NULL;
-            END IF;
-        END $$;
-        """)
-
-        cur.execute("""
-        DO $$ BEGIN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.tables
-                WHERE table_name='tasks' AND table_schema='public'
-            ) THEN
-                INSERT INTO tasks_short (text)
-                SELECT text FROM tasks
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM tasks_short ts WHERE ts.text = tasks.text
-                );
-                DROP TABLE tasks;
-            END IF;
-        END $$;
         """)
     conn.commit()
 
@@ -260,10 +258,10 @@ def remove_calendar_by_name(conn, name: str) -> int:
 
 
 def short_tasks(conn, bucket: str | None = None) -> list[dict]:
-    sql = "SELECT * FROM tasks_short"
+    sql = "SELECT * FROM tasks_short WHERE completed_at IS NULL"
     params: tuple = ()
     if bucket is not None:
-        sql += " WHERE bucket = %s"
+        sql += " AND bucket = %s"
         params = (bucket,)
     sql += " ORDER BY id"
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -273,7 +271,11 @@ def short_tasks(conn, bucket: str | None = None) -> list[dict]:
 
 def short_task_exists(conn, text: str) -> bool:
     with conn.cursor() as cur:
-        cur.execute("SELECT 1 FROM tasks_short WHERE LOWER(text) = LOWER(%s)", (text,))
+        cur.execute(
+            "SELECT 1 FROM tasks_short "
+            "WHERE LOWER(text) = LOWER(%s) AND completed_at IS NULL",
+            (text,),
+        )
         return cur.fetchone() is not None
 
 
@@ -291,20 +293,40 @@ def add_short_task(conn, text: str, bucket: str | None, due_at: datetime | None)
 def remove_short_task(conn, substring: str) -> dict | None:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
-            "SELECT * FROM tasks_short WHERE text ILIKE %s ORDER BY id LIMIT 1",
+            "SELECT * FROM tasks_short "
+            "WHERE text ILIKE %s AND completed_at IS NULL "
+            "ORDER BY id LIMIT 1",
             (f"%{substring}%",),
         )
         row = cur.fetchone()
         if row is None:
             return None
-        cur.execute("DELETE FROM tasks_short WHERE id = %s", (row["id"],))
+        cur.execute(
+            "UPDATE tasks_short SET completed_at = NOW() WHERE id = %s",
+            (row["id"],),
+        )
     conn.commit()
     return dict(row)
 
 
+def recent_completed_short(conn, days: int = 3) -> list[dict]:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM tasks_short "
+            "WHERE completed_at IS NOT NULL "
+            "  AND completed_at >= NOW() - %s::interval "
+            "ORDER BY completed_at DESC",
+            (f"{days} days",),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
 def long_tasks(conn) -> list[dict]:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("SELECT * FROM tasks_long ORDER BY due_date, id")
+        cur.execute(
+            "SELECT * FROM tasks_long WHERE completed_at IS NULL "
+            "ORDER BY due_date, id"
+        )
         return [dict(r) for r in cur.fetchall()]
 
 
@@ -322,15 +344,49 @@ def add_long_task(conn, text: str, due_date: date) -> int:
 def remove_long_task(conn, substring: str) -> dict | None:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
-            "SELECT * FROM tasks_long WHERE text ILIKE %s ORDER BY due_date, id LIMIT 1",
+            "SELECT * FROM tasks_long "
+            "WHERE text ILIKE %s AND completed_at IS NULL "
+            "ORDER BY due_date, id LIMIT 1",
             (f"%{substring}%",),
         )
         row = cur.fetchone()
         if row is None:
             return None
-        cur.execute("DELETE FROM tasks_long WHERE id = %s", (row["id"],))
+        cur.execute(
+            "UPDATE tasks_long SET completed_at = NOW() WHERE id = %s",
+            (row["id"],),
+        )
     conn.commit()
     return dict(row)
+
+
+def recent_completed_long(conn, days: int = 3) -> list[dict]:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM tasks_long "
+            "WHERE completed_at IS NOT NULL "
+            "  AND completed_at >= NOW() - %s::interval "
+            "ORDER BY completed_at DESC",
+            (f"{days} days",),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def prune_completed_tasks(conn, days: int = 30) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM tasks_short "
+            "WHERE completed_at IS NOT NULL "
+            "  AND completed_at < NOW() - %s::interval",
+            (f"{days} days",),
+        )
+        cur.execute(
+            "DELETE FROM tasks_long "
+            "WHERE completed_at IS NOT NULL "
+            "  AND completed_at < NOW() - %s::interval",
+            (f"{days} days",),
+        )
+    conn.commit()
 
 
 def countdowns(conn) -> list[dict]:
@@ -476,35 +532,130 @@ def weather_cache_put(conn, payload: dict) -> None:
     conn.commit()
 
 
-def quote_cache_get(conn, for_date: date) -> dict | None:
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("SELECT * FROM quote_cache WHERE for_date = %s", (for_date,))
-        row = cur.fetchone()
-    return dict(row) if row else None
-
-
-def quote_cache_get_recent(conn, max_age_days: int = 7) -> dict | None:
+def quote_pool_for_date(conn, for_date: date) -> list[dict]:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute(
-            "SELECT * FROM quote_cache "
-            "WHERE for_date > CURRENT_DATE - %s::interval "
-            "ORDER BY for_date DESC LIMIT 1",
-            (f"{max_age_days} days",),
+            "SELECT * FROM quote_pool WHERE for_date = %s ORDER BY id",
+            (for_date,),
         )
-        row = cur.fetchone()
-    return dict(row) if row else None
+        return [dict(r) for r in cur.fetchall()]
 
 
-def quote_cache_put(conn, for_date: date, text: str, author: str | None, source: str) -> None:
+def quote_pool_recent(conn, days: int = 7) -> list[dict]:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM quote_pool "
+            "WHERE for_date > CURRENT_DATE - %s::interval "
+            "ORDER BY for_date DESC, id",
+            (f"{days} days",),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def quote_pool_put_many(conn, for_date: date, quotes: Iterable[dict]) -> int:
+    n = 0
+    with conn.cursor() as cur:
+        for q in quotes:
+            text = (q.get("text") or "").strip()
+            if not text:
+                continue
+            cur.execute(
+                "INSERT INTO quote_pool (for_date, text, author, source) "
+                "VALUES (%s, %s, %s, %s) "
+                "ON CONFLICT (for_date, text) DO NOTHING",
+                (for_date, text, q.get("author"), q.get("source")),
+            )
+            n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def quote_pool_prune(conn, days: int = 7) -> None:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO quote_cache (for_date, text, author, source) "
-            "VALUES (%s, %s, %s, %s) "
-            "ON CONFLICT (for_date) DO UPDATE SET "
-            "text = EXCLUDED.text, author = EXCLUDED.author, source = EXCLUDED.source",
-            (for_date, text, author, source),
+            "DELETE FROM quote_pool WHERE for_date < CURRENT_DATE - %s::interval",
+            (f"{days} days",),
         )
     conn.commit()
+
+
+def concept2_results_upsert_many(conn, rows: Iterable[dict]) -> int:
+    n = 0
+    with conn.cursor() as cur:
+        for r in rows:
+            cur.execute(
+                "INSERT INTO concept2_results "
+                "(id, date, type, workout_type, distance, time_tenths, "
+                " time_formatted, stroke_rate, heart_rate_avg, calories_total, "
+                " drag_factor, comments, raw, fetched_at) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW()) "
+                "ON CONFLICT (id) DO UPDATE SET "
+                "  date = EXCLUDED.date, "
+                "  type = EXCLUDED.type, "
+                "  workout_type = EXCLUDED.workout_type, "
+                "  distance = EXCLUDED.distance, "
+                "  time_tenths = EXCLUDED.time_tenths, "
+                "  time_formatted = EXCLUDED.time_formatted, "
+                "  stroke_rate = EXCLUDED.stroke_rate, "
+                "  heart_rate_avg = EXCLUDED.heart_rate_avg, "
+                "  calories_total = EXCLUDED.calories_total, "
+                "  drag_factor = EXCLUDED.drag_factor, "
+                "  comments = EXCLUDED.comments, "
+                "  raw = EXCLUDED.raw, "
+                "  fetched_at = NOW()",
+                (
+                    r["id"], r["date"], r.get("type"), r.get("workout_type"),
+                    r.get("distance"), r.get("time_tenths"), r.get("time_formatted"),
+                    r.get("stroke_rate"), r.get("heart_rate_avg"),
+                    r.get("calories_total"), r.get("drag_factor"),
+                    r.get("comments"), Json(r.get("raw") or {}),
+                ),
+            )
+            n += cur.rowcount
+    conn.commit()
+    return n
+
+
+def concept2_results_since(conn, since: datetime) -> list[dict]:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM concept2_results "
+            "WHERE date >= %s ORDER BY date DESC",
+            (since,),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def concept2_results_window(conn, start: datetime, end: datetime) -> list[dict]:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT * FROM concept2_results "
+            "WHERE date >= %s AND date < %s ORDER BY date DESC",
+            (start, end),
+        )
+        return [dict(r) for r in cur.fetchall()]
+
+
+def concept2_lifetime_totals(conn) -> dict:
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS n, "
+            "       COALESCE(SUM(distance), 0) AS distance, "
+            "       COALESCE(SUM(time_tenths), 0) AS time_tenths, "
+            "       COALESCE(SUM(calories_total), 0) AS calories, "
+            "       MIN(date) AS first_date, "
+            "       MAX(date) AS last_date "
+            "FROM concept2_results"
+        )
+        row = cur.fetchone()
+    return dict(row) if row else {}
+
+
+def concept2_last_sync_at(conn) -> datetime | None:
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(fetched_at) FROM concept2_results")
+        row = cur.fetchone()
+    return row[0] if row else None
 
 
 def email_already_processed(conn, gmail_msg_id: str) -> bool:

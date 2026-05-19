@@ -86,11 +86,19 @@ def age_block(birthdate: date, today: date) -> dict:
         "months": months,
         "days": days,
         "today_iso": today.isoformat(),
+        "today_pretty": today.strftime("%B %-d, %Y"),
         "next_age": years + 1,
         "to_next_months": max(0, n_months),
         "to_next_days": max(0, n_days),
         "to_next_total_days": delta.days,
     }
+
+
+_SOURCE_LABELS: dict[str, str] = {
+    "short": "Short task",
+    "long": "Long task",
+    "calendar": "Calendar",
+}
 
 
 def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dict], today: date) -> list[dict]:
@@ -107,6 +115,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
             "source": "long",
+            "source_label": _SOURCE_LABELS["long"],
             "removable": True,
         })
     for st in short_tasks:
@@ -123,6 +132,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
             "source": "short",
+            "source_label": _SOURCE_LABELS["short"],
             "removable": True,
         })
     for ev in events:
@@ -139,6 +149,7 @@ def build_dues(long_tasks: list[dict], short_tasks: list[dict], events: list[dic
             "humanized": _humanize_days(days),
             "color": _color_for_days(days),
             "source": "calendar",
+            "source_label": _SOURCE_LABELS["calendar"],
             "removable": False,
         })
     out.sort(key=lambda d: (d["days"], d["label"]))
@@ -253,6 +264,162 @@ def shape_reflections(rows: list[dict]) -> list[dict]:
             "expires_at": format_email_date(r["expires_at"], include_year=True),
         })
     return out
+
+
+def _humanize_completed(completed_at: datetime, now: datetime) -> str:
+    delta = now - completed_at
+    seconds = int(delta.total_seconds())
+    if seconds < 0:
+        return "just now"
+    if seconds < 60:
+        return "just now"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} min ago"
+    days_diff = (now.date() - completed_at.date()).days
+    if days_diff <= 0:
+        return f"today, {completed_at.strftime('%-I:%M %p').lower()}"
+    if days_diff == 1:
+        return f"yesterday, {completed_at.strftime('%-I:%M %p').lower()}"
+    return f"{days_diff} days ago"
+
+
+def shape_recent_completed(short_rows: list[dict], long_rows: list[dict], now: datetime) -> list[dict]:
+    out: list[dict] = []
+    for r in short_rows:
+        if not r.get("completed_at"):
+            continue
+        out.append({
+            "text": r["text"],
+            "source": "short",
+            "completed_at": r["completed_at"],
+            "when": _humanize_completed(r["completed_at"], now),
+        })
+    for r in long_rows:
+        if not r.get("completed_at"):
+            continue
+        out.append({
+            "text": r["text"],
+            "source": "long",
+            "completed_at": r["completed_at"],
+            "when": _humanize_completed(r["completed_at"], now),
+        })
+    out.sort(key=lambda r: r["completed_at"], reverse=True)
+    return out
+
+
+def _c2_format_distance(meters: int | None) -> str:
+    if not meters:
+        return "—"
+    if meters >= 10000:
+        return f"{meters / 1000:.1f} km"
+    if meters >= 1000:
+        return f"{meters / 1000:.2f} km"
+    return f"{meters} m"
+
+
+def _c2_format_time(time_tenths: int | None) -> str:
+    if not time_tenths:
+        return "—"
+    secs = time_tenths // 10
+    h, rem = divmod(secs, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}:{m:02d}:{s:02d}"
+    return f"{m}:{s:02d}"
+
+
+def _c2_format_pace(distance: int | None, time_tenths: int | None) -> str:
+    if not distance or not time_tenths or distance < 100:
+        return ""
+    pace_tenths = round(time_tenths * 500 / distance)
+    secs = pace_tenths // 10
+    m, s = divmod(secs, 60)
+    tenth = pace_tenths % 10
+    return f"{m}:{s:02d}.{tenth}/500m"
+
+
+def _c2_parse_dt(value, tz: ZoneInfo) -> datetime:
+    if isinstance(value, datetime):
+        return value.astimezone(tz) if value.tzinfo else value.replace(tzinfo=tz)
+    return datetime.fromisoformat(str(value)).replace(tzinfo=tz) if value else datetime.now(tz)
+
+
+def _c2_shape_item(r: dict, tz: ZoneInfo) -> dict:
+    dt = _c2_parse_dt(r.get("date"), tz)
+    type_lower = (r.get("type") or "").lower()
+    rate_label = "rpm" if type_lower == "bike" else "spm"
+    return {
+        "date": dt,
+        "date_label": dt.strftime("%a %b %-d"),
+        "distance": _c2_format_distance(r.get("distance")),
+        "time": _c2_format_time(r.get("time_tenths")) or r.get("time_formatted") or "—",
+        "pace": _c2_format_pace(r.get("distance"), r.get("time_tenths")),
+        "stroke_rate": r.get("stroke_rate"),
+        "rate_label": rate_label,
+        "heart_rate_avg": r.get("heart_rate_avg"),
+        "calories": r.get("calories_total"),
+        "comments": (r.get("comments") or "").strip() or None,
+    }
+
+
+def _c2_week_grid(week_raw: list[dict], week_start: date, today: date,
+                   tz: ZoneInfo) -> list[dict]:
+    grid = []
+    for i in range(7):
+        d = week_start + timedelta(days=i)
+        day_rows = [
+            r for r in week_raw
+            if _c2_parse_dt(r.get("date"), tz).date() == d
+        ]
+        total_m = sum((r.get("distance") or 0) for r in day_rows)
+        grid.append({
+            "day": d.strftime("%a"),
+            "count": len(day_rows),
+            "distance": _c2_format_distance(total_m) if total_m else None,
+            "is_today": d == today,
+            "is_future": d > today,
+        })
+    return grid
+
+
+def shape_concept2(data: dict | None, now: datetime) -> dict | None:
+    if not data:
+        return None
+    tz = now.tzinfo or ZoneInfo("UTC")
+    today = now.date()
+    week_start = data.get("week_start") or (today - timedelta(days=today.weekday()))
+
+    week_raw = data.get("week") or []
+    week_grid = _c2_week_grid(week_raw, week_start, today, tz)
+    week_m = sum((r.get("distance") or 0) for r in week_raw)
+    week_t = sum((r.get("time_tenths") or 0) for r in week_raw)
+    week_count = sum(d["count"] for d in week_grid)
+
+    recent_raw = data.get("recent") or []
+    workouts = sorted(
+        (_c2_shape_item(r, tz) for r in recent_raw),
+        key=lambda x: x["date"],
+        reverse=True,
+    )
+    month_m = sum((r.get("distance") or 0) for r in recent_raw)
+    month_t = sum((r.get("time_tenths") or 0) for r in recent_raw)
+    lifetime = data.get("lifetime") or {}
+
+    return {
+        "week_grid": week_grid,
+        "week_count": week_count,
+        "week_distance": _c2_format_distance(week_m),
+        "week_time": _c2_format_time(week_t),
+        "window_days": data.get("window_days", 30),
+        "window_count": len(workouts),
+        "window_distance": _c2_format_distance(month_m),
+        "window_time": _c2_format_time(month_t),
+        "lifetime_count": int(lifetime.get("n") or 0),
+        "lifetime_distance": _c2_format_distance(int(lifetime.get("distance") or 0)),
+        "lifetime_time": _c2_format_time(int(lifetime.get("time_tenths") or 0)),
+        "workouts": workouts,
+    }
 
 
 def render(sections: set[str], context: dict) -> str:
