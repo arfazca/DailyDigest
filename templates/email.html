@@ -3,330 +3,526 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="dark only" />
+<meta name="supported-color-schemes" content="dark only" />
 <title>Daily Digest</title>
+<!--
+  DailyDigest — dark redesign
+  Pure-OLED-black, Vercel/Geist DNA, mobile-first.
+  All template variables match the original templates/email.html so this
+  is a drop-in replacement. premailer will inline the styles below.
+-->
 <style>
-  body { margin:0; padding:24px 12px; background:#f5f1ea;
-         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-         color:#2a2a2a; line-height:1.5; }
-  sup { font-size:0.72em; line-height:0; vertical-align:super; }
-  .container { max-width:620px; margin:0 auto; background:#fff;
-               border-radius:12px; overflow:hidden;
-               box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+  /* Geist is loaded by the few clients that respect web fonts (Apple Mail
+     on iOS/macOS in particular). Everywhere else falls back to SF / system. */
+  @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
 
-  .header { padding:28px 32px 22px; border-bottom:1px solid #ece7df; }
-  .date-label { font-size:12px; color:#6b6860; text-transform:uppercase;
-                letter-spacing:1.8px; margin:0 0 6px; font-weight:600; }
-  .date-main { font-size:26px; font-weight:700; color:#1a1a1a; margin:0;
-               letter-spacing:-0.5px; }
+  body {
+    margin: 0; padding: 0;
+    background: #000;
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: #ededed; line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  sup { font-size: 0.72em; line-height: 0; vertical-align: super; }
+  a { color: #0070F3; }
 
-  .section { padding:22px 32px; }
-  .section + .section { border-top:1px solid #f3efe7; }
-  .section-title { font-size:11px; color:#6b6860; text-transform:uppercase;
-                   letter-spacing:1.8px; margin:0 0 14px; font-weight:700; }
+  .container { max-width: 620px; margin: 0 auto; background: #000; }
+  .pad   { padding: 22px 20px; }
+  .hr    { height: 1px; background: #1a1a1a; line-height: 0; font-size: 0; }
 
-  .age-row { display:flex; gap:16px; margin-top:10px;
-             padding:12px 14px; background:#faf8f3; border-radius:8px; }
-  .age-block { flex:1; }
-  .age-line { font-size:14px; color:#2a2a2a; margin:0; }
-  .age-sub  { font-size:12px; color:#6b6860; margin:4px 0 0; }
+  /* meta row above the date */
+  .meta {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #707070; letter-spacing: 0.04em;
+    margin: 0 0 14px; white-space: nowrap;
+  }
+  .meta .dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 1px;
+    background: #0070F3; vertical-align: middle; margin-right: 8px;
+    box-shadow: 0 0 8px rgba(0,112,243,0.4);
+  }
+  .meta .wk    { color: #ededed; }
+  .meta .sep   { color: #4a4a4a; margin: 0 6px; }
+  .meta .iso   { float: right; color: #707070; }
 
-  .due { padding:10px 12px; border-radius:8px; margin-bottom:8px;
-         display:flex; justify-content:space-between; align-items:center;
-         font-size:14px; }
-  .due-green     { background:#e6f4ea; color:#1e6a3a; border-left:4px solid #2d8a4f; }
-  .due-yellow    { background:#fff8d4; color:#7c5a00; border-left:4px solid #d4a843; }
-  .due-orange    { background:#fde7d3; color:#8a4a16; border-left:4px solid #d4742b; }
-  .due-red-orange{ background:#fcd9c7; color:#8a2c0e; border-left:4px solid #c8492b; }
-  .due-red       { background:#f9d2cf; color:#7a1d11; border-left:4px solid #a82420; }
-  .due-overdue   { background:#3a1010; color:#fff; border-left:4px solid #ff5e57; }
-  .due-neutral   { background:#f5f1ea; color:#5a5550; border-left:4px solid #c5c0b3; }
-  .due-label  { font-weight:600; }
-  .due-when   { font-size:12px; opacity:0.8; }
-  .due-src    { font-size:10px; text-transform:uppercase; letter-spacing:1px;
-                margin-left:8px; opacity:0.6; }
+  .date {
+    margin: 0; font-size: 34px; font-weight: 600;
+    color: #ededed; letter-spacing: -0.04em; line-height: 1.05;
+  }
 
-  .changes { background:#eef7ef; padding:18px 22px; border-radius:8px;
-             margin-bottom:6px; }
-  .changes-title { font-size:11px; color:#2d6a4f; text-transform:uppercase;
-                   letter-spacing:1.8px; font-weight:700; margin:0 0 10px; }
-  .change-row { padding:5px 0; font-size:14px; color:#1f4a36; }
-  .change-row.miss { color:#7a1d11; }
+  .age {
+    margin-top: 18px; padding: 14px 14px; border-radius: 8px;
+    background: #080808; border: 1px solid #1a1a1a;
+  }
+  .age-line { font-size: 13px; color: #ededed; line-height: 1.45; margin: 0; }
+  .age-line strong { color: #0070F3; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .age-sub {
+    margin: 6px 0 0; font-size: 12px; color: #707070;
+    font-variant-numeric: tabular-nums; line-height: 1.4;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+  }
+  .age-sub .faint { color: #4a4a4a; }
 
-  .errors { background:#fff5f0; padding:18px 22px; border-radius:8px;
-            margin-top:8px; border:1px solid #f0d0c0; }
-  .errors-title { font-size:11px; color:#8a4a16; text-transform:uppercase;
-                  letter-spacing:1.8px; font-weight:700; margin:0 0 10px; }
-  .err-line { background:#ece7df; padding:6px 10px; border-radius:4px;
-              font-family:'SF Mono',Monaco,Consolas,monospace; font-size:12px;
-              color:#5a5550; margin-bottom:4px; }
-  .err-reason { font-size:12px; color:#8a4a16; margin:0 0 10px 4px; }
+  /* section label */
+  .label {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.16em;
+    text-transform: uppercase; color: #707070;
+    margin: 0 0 14px;
+  }
 
-  .weather-summary { font-size:14px; color:#2a2a2a; margin:0 0 14px; }
-  .weather-row { display:flex; justify-content:space-between; padding:6px 0;
-                 border-bottom:1px solid #f3efe7; font-size:13px; }
-  .weather-row:last-child { border-bottom:none; }
-  .weather-time { font-variant-numeric:tabular-nums; color:#6b6860;
-                  width:60px; flex-shrink:0; }
-  .weather-temp { font-weight:700; color:#1a1a1a; width:50px; flex-shrink:0;
-                  text-align:right; }
-  .weather-desc { flex:1; color:#5a5550; padding:0 12px; }
-  .weather-pop  { width:50px; flex-shrink:0; text-align:right; color:#3a6ea5;
-                  font-size:12px; }
+  /* due rows + long tasks */
+  .row {
+    border-collapse: collapse; width: 100%; margin: 0;
+    border-bottom: 1px solid #111;
+  }
+  .row:last-child { border-bottom: none; }
+  .row td { vertical-align: top; padding: 11px 0; }
+  .row td.bar { width: 2px; padding: 11px 0; }
+  .row td.bar div {
+    width: 2px; min-height: 36px; height: 100%; border-radius: 1px;
+    background: #50E3C2;
+  }
+  .row td.gap { width: 12px; }
+  .row .title {
+    font-size: 14px; color: #ededed; font-weight: 500; line-height: 1.3;
+  }
+  .row .tag {
+    float: right; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #5a5a5a; letter-spacing: 0.08em;
+    text-transform: uppercase; padding-left: 8px;
+  }
+  .row .submeta {
+    margin-top: 3px; font-size: 12px; color: #707070;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+  }
+  .row .submeta .accent { font-weight: 500; }
+  .row .submeta .dim    { color: #4a4a4a; margin: 0 6px; }
 
-  .event { padding:11px 0; border-bottom:1px solid #f3efe7; }
-  .event:last-child { border-bottom:none; padding-bottom:0; }
-  .event:first-child { padding-top:0; }
-  .event-time { font-size:12px; color:#b85c2b; font-weight:700;
-                font-variant-numeric:tabular-nums; letter-spacing:0.3px; }
-  .event-title { font-size:15px; color:#1a1a1a; margin-top:3px; font-weight:500; }
-  .event-cal   { font-size:11px; color:#6b6860; margin-top:2px;
-                 text-transform:uppercase; letter-spacing:0.8px; }
-  .event.past .event-time { text-decoration:line-through; color:#b5b0a5; }
-  .event.past .event-title { color:#b5b0a5; }
-  .event.past .event-cal { color:#c5c0b3; }
-  .event.due .event-time { color:#a82420; }
+  /* bar color variants — td.bar.bar-X div gets the color */
+  .bar-green     div { background: #50E3C2; }
+  .bar-yellow    div { background: #FFE066; }
+  .bar-orange    div { background: #F5A623; }
+  .bar-red-orange div { background: #FF7849; }
+  .bar-red       div { background: #FF4D4D; }
+  .bar-overdue   div { background: #FF4D4D; box-shadow: 0 0 6px rgba(255,77,77,0.5); }
+  .bar-neutral   div { background: #2a2a2a; }
 
-  .task { padding:9px 0; font-size:15px; color:#1a1a1a;
-          border-bottom:1px solid #f3efe7; }
-  .task:last-child { border-bottom:none; padding-bottom:0; }
-  .task:first-child { padding-top:0; }
-  .bullet { color:#b85c2b; font-weight:700; margin-right:10px; }
-  .task-due { font-size:12px; color:#6b6860; margin-left:8px; }
-  .bucket-title { font-size:11px; color:#5a5550; text-transform:uppercase;
-                  letter-spacing:1.4px; font-weight:700; margin:14px 0 8px; }
+  /* due accent text colors */
+  .due-green     .accent { color: #50E3C2; }
+  .due-yellow    .accent { color: #FFE066; }
+  .due-orange    .accent { color: #F5A623; }
+  .due-red-orange .accent { color: #FF7849; }
+  .due-red       .accent { color: #FF4D4D; }
+  .due-overdue   .accent { color: #FF4D4D; }
+  .due-neutral   .accent { color: #a1a1a1; }
 
-  .long-row { padding:10px 12px; border-radius:6px; margin-bottom:6px;
-              display:flex; justify-content:space-between; font-size:14px; }
-  .long-row .when { font-size:12px; color:#6b6860; }
+  /* changes */
+  .changes      { display: block; }
+  .change-row   { font-size: 13px; color: #ededed; line-height: 1.5; padding: 2px 0; }
+  .change-row .glyph {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    color: #0070F3; margin-right: 8px; font-weight: 500; display: inline-block; width: 12px;
+  }
+  .change-row.miss { color: #FF4D4D; }
+  .change-row.miss .glyph { color: #FF4D4D; }
 
-  .countdown { padding:10px 12px; background:#faf8f3; border-radius:8px;
-               margin-bottom:8px; display:flex; justify-content:space-between; }
-  .countdown-name { font-weight:600; color:#1a1a1a; font-size:14px; }
-  .countdown-target { font-size:11px; color:#6b6860; }
-  .countdown-label { font-family:'SF Mono',Monaco,Consolas,monospace;
-                     font-size:13px; color:#b85c2b; font-weight:700; }
+  /* errors */
+  .errors-title { color: #FF7849; }
+  .err-line {
+    background: #0a0a0a; border: 1px solid #1f1f1f;
+    padding: 6px 10px; border-radius: 4px;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px; color: #ededed; margin-bottom: 4px;
+  }
+  .err-reason { font-size: 12px; color: #a1a1a1; margin: 0 0 10px 4px; line-height: 1.5; }
+  .err-reason code {
+    background: #111; color: #ededed; padding: 1px 6px; border-radius: 3px;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; border: 1px solid #1f1f1f;
+  }
 
-  .reflection { padding:12px 14px; background:#f4f0e6; border-radius:8px;
-                margin-bottom:8px; }
-  .reflection-text { font-size:14px; color:#2a2a2a; margin:0; }
-  .reflection-meta { font-size:11px; color:#6b6860; margin:6px 0 0;
-                     text-transform:uppercase; letter-spacing:1px; }
+  /* weather */
+  .weather-summary { font-size: 13px; color: #a1a1a1; margin: 0 0 14px; line-height: 1.45; }
+  .whrow {
+    border-collapse: collapse; width: 100%;
+    border-top: 1px solid #111;
+  }
+  .whrow:first-child { border-top: none; }
+  .whrow td { padding: 7px 0; font-size: 13px; vertical-align: middle; }
+  .whrow .t {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    color: #707070; font-size: 12px; font-variant-numeric: tabular-nums;
+    width: 48px; white-space: nowrap;
+  }
+  .whrow .temp {
+    color: #ededed; font-weight: 600; width: 40px; text-align: right;
+    font-variant-numeric: tabular-nums; padding-right: 4px;
+  }
+  .whrow .desc { color: #a1a1a1; font-size: 12px; padding-left: 8px; }
+  .whrow .pop {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #0070F3; font-variant-numeric: tabular-nums;
+    width: 36px; text-align: right; white-space: nowrap;
+  }
 
-  .quote { padding:22px 32px; background:#1a1a1a; color:#f5f1ea; }
-  .quote-text { font-style:italic; font-size:15px; line-height:1.6; margin:0; }
-  .quote-author { font-size:12px; color:#b5b0a5; margin:10px 0 0;
-                  text-transform:uppercase; letter-spacing:1.5px; }
+  /* timeline */
+  .ev { border-collapse: collapse; width: 100%; border-top: 1px solid #111; }
+  .ev:first-child { border-top: none; }
+  .ev td { vertical-align: top; padding: 10px 0; }
+  .ev .when {
+    width: 56px; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #0070F3; font-weight: 500;
+    font-variant-numeric: tabular-nums; padding-top: 1px; white-space: nowrap;
+  }
+  .ev .body { padding-left: 12px; }
+  .ev .ttl { font-size: 14px; color: #ededed; font-weight: 500; line-height: 1.3; }
+  .ev .cal {
+    margin-top: 2px; font-size: 10px; color: #5a5a5a;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .ev.past .when, .ev.past .ttl { color: #5a5a5a; text-decoration: line-through; }
+  .ev.past .cal { color: #3a3a3a; }
+  .ev.due  .when { color: #FF4D4D; }
+  .ev .duetag {
+    margin-left: 8px; font-size: 10px; color: #FF4D4D;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    letter-spacing: 0.1em;
+  }
 
-  .empty { color:#b5b0a5; font-style:italic; font-size:14px; margin:0; }
+  /* tasks */
+  .task { border-collapse: collapse; width: 100%; border-top: 1px solid #111; }
+  .task:first-child { border-top: none; }
+  .task td { vertical-align: top; padding: 8px 0; }
+  .task .bx {
+    width: 14px; padding-top: 5px;
+  }
+  .task .bx div {
+    width: 11px; height: 11px; border: 1px solid #2a2a2a; border-radius: 2px;
+  }
+  .task .txt { font-size: 14px; color: #ededed; line-height: 1.35; padding-left: 10px; }
+  .task .due {
+    display: block; margin-top: 2px; font-size: 11px; color: #707070;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .bucket-label {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #5a5a5a; letter-spacing: 0.12em;
+    text-transform: uppercase; margin: 18px 0 4px;
+  }
 
-  .footer { padding:18px 32px 22px; background:#faf8f3; font-size:12px;
-            color:#6b6860; line-height:1.7; }
-  .footer strong { color:#5a5550; display:block; margin-bottom:6px;
-                   font-size:11px; text-transform:uppercase;
-                   letter-spacing:1.2px; }
-  .footer code { background:#ece7df; padding:2px 7px; border-radius:4px;
-                 font-family:'SF Mono',Monaco,Consolas,monospace; font-size:11px;
-                 color:#5a5550; }
+  /* countdowns */
+  .cd {
+    background: #080808; border: 1px solid #1a1a1a; border-radius: 6px;
+    padding: 12px 14px; margin-bottom: 8px;
+    width: 100%; border-collapse: separate;
+  }
+  .cd .name { font-size: 13px; color: #ededed; font-weight: 500; line-height: 1.3; }
+  .cd .tgt {
+    margin-top: 2px; font-size: 11px; color: #707070;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .cd .lbl {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 14px; font-weight: 600; color: #0070F3;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+
+  /* reflections */
+  .refl {
+    background: #080808; border: 1px solid #1a1a1a; border-radius: 6px;
+    border-left: 2px solid #50E3C2; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .refl .text { font-size: 13px; color: #ededed; line-height: 1.45; margin: 0; }
+  .refl .meta {
+    margin: 8px 0 0; font-size: 10px; color: #5a5a5a;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+
+  /* quote */
+  .quote {
+    padding: 18px 18px; background: #0a0a0a;
+    border: 1px solid #1a1a1a; border-radius: 8px;
+    position: relative;
+  }
+  .quote .qtext {
+    font-size: 14px; color: #ededed; line-height: 1.55;
+    font-style: italic; margin: 0; padding-left: 14px;
+    border-left: 2px solid #262626;
+  }
+  .quote .qauth {
+    margin: 12px 0 0; padding-left: 14px; font-size: 11px; color: #707070;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+
+  /* footer */
+  .footer {
+    padding: 20px 20px 26px; border-top: 1px solid #1a1a1a;
+    background: #030303;
+  }
+  .footer .ftitle {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #5a5a5a; letter-spacing: 0.16em;
+    text-transform: uppercase; margin: 0 0 10px;
+  }
+  .footer code {
+    display: inline-block; background: #111; color: #ededed;
+    padding: 2px 6px; border-radius: 3px; font-size: 11px;
+    border: 1px solid #1f1f1f; margin: 2px 4px 2px 0;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+  }
+  .footer p { margin: 12px 0 0; font-size: 11px; color: #5a5a5a; line-height: 1.55; }
 </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <p class="date-label">{{ weekday }} · {{ now_label }}</p>
-      <h1 class="date-main">{{ date_long }}</h1>
-      {% if 'age' in sections and age %}
-        <div class="age-row">
-          <div class="age-block">
-            <p class="age-line">You are <strong>{{ age.years }} years, {{ age.months }} months, {{ age.days }} days</strong> old today, {{ age.today_iso }}.</p>
-            <p class="age-sub">{{ age.to_next_months }} months, {{ age.to_next_days }} days away from turning {{ age.next_age }} ({{ age.to_next_total_days }} days total).</p>
-          </div>
-        </div>
+<div class="container">
+
+  <!-- ────────── header ────────── -->
+  <div class="pad">
+    <p class="meta">
+      <span class="dot"></span>
+      <span class="wk">{{ weekday }}</span>
+      <span class="sep">·</span>{{ now_label }}
+      {% if age and age.today_iso %}<span class="iso">{{ age.today_iso }}</span>{% endif %}
+    </p>
+    <h1 class="date">{{ date_long }}</h1>
+
+    {% if 'age' in sections and age %}
+      <div class="age">
+        <p class="age-line">You are <strong>{{ age.years }}y {{ age.months }}m {{ age.days }}d</strong> old today.</p>
+        <p class="age-sub">{{ age.to_next_months }}mo {{ age.to_next_days }}d → {{ age.next_age }}<span class="faint"> · {{ age.to_next_total_days }}d total</span></p>
+      </div>
+    {% endif %}
+  </div>
+  <div class="hr"></div>
+
+  <!-- ────────── due dashboard ────────── -->
+  {% if 'due' in sections and dues %}
+    <div class="pad">
+      <p class="label">Due · next 14 days</p>
+      {% for d in dues %}
+        <table class="row due-{{ d.color }}"><tr>
+          <td class="bar bar-{{ d.color }}"><div></div></td>
+          <td class="gap"></td>
+          <td>
+            <div class="title">{{ d.label }}<span class="tag">{{ d.source }}</span></div>
+            <div class="submeta"><span class="accent">{{ d.humanized }}</span><span class="dim">·</span>{{ d.when }}</div>
+          </td>
+        </tr></table>
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── what changed ────────── -->
+  {% if change_log or not_found %}
+    <div class="pad">
+      <p class="label">What changed</p>
+      <div class="changes">
+        {% for c in change_log %}
+          <div class="change-row"><span class="glyph">✓</span>{{ c }}</div>
+        {% endfor %}
+        {% for nf in not_found %}
+          <div class="change-row miss"><span class="glyph">×</span>{{ nf }} — not in list</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── could not parse ────────── -->
+  {% if unknowns %}
+    <div class="pad">
+      <p class="label errors-title">Could not parse</p>
+      {% for subj, line, reason in unknowns %}
+        <div class="err-line">{{ line }}</div>
+        <p class="err-reason">{{ reason }}{% if subj %} (in: {{ subj }}){% endif %}</p>
+      {% endfor %}
+      <p class="err-reason">Valid: <code>add</code> · <code>+</code> · <code>done</code> · <code>remove</code> · <code>show</code>. <code>add</code>/<code>done</code>/<code>remove</code> need a quoted "string". <code>show</code> takes one keyword.</p>
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── weather ────────── -->
+  {% if 'weather' in sections and weather %}
+    <div class="pad">
+      <p class="label">Weather · rest of today</p>
+      <p class="weather-summary">{{ weather.summary }}</p>
+      {% if weather.hourly %}
+        {% for h in weather.hourly %}
+          <table class="whrow"><tr>
+            <td class="t">{{ h.time }}</td>
+            <td class="temp">{{ h.temp }}°</td>
+            <td class="desc">{{ h.description }}</td>
+            <td class="pop">{% if h.precip_pct %}{{ h.precip_pct }}%{% endif %}</td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">No hourly data available.</p>
       {% endif %}
     </div>
-
-    {% if 'due' in sections and dues %}
-      <div class="section">
-        <p class="section-title">Due within 14 days</p>
-        {% for d in dues %}
-          <div class="due due-{{ d.color }}">
-            <div>
-              <span class="due-label">{{ d.label }}</span>
-              <span class="due-src">{{ d.source }}</span>
-              <div class="due-when">{{ d.when }} · {{ d.humanized }}</div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if change_log or not_found %}
-      <div class="section">
-        <p class="section-title">What changed</p>
-        <div class="changes">
-          {% for c in change_log %}
-            <div class="change-row">✓ {{ c }}</div>
-          {% endfor %}
-          {% for nf in not_found %}
-            <div class="change-row miss">✗ {{ nf }} — not in list</div>
-          {% endfor %}
-        </div>
-      </div>
-    {% endif %}
-
-    {% if unknowns %}
-      <div class="section">
-        <p class="section-title">Could not parse</p>
-        <div class="errors">
-          {% for subj, line, reason in unknowns %}
-            <div class="err-line">{{ line }}</div>
-            <p class="err-reason">{{ reason }}{% if subj %} (in: {{ subj }}){% endif %}</p>
-          {% endfor %}
-          <p class="err-reason">Valid keywords: <code>add</code>, <code>+</code>, <code>done</code>, <code>remove</code>, <code>show</code>. <code>add</code>/<code>done</code>/<code>remove</code> need a quoted "string". <code>show</code> takes a single keyword (calendar, weather, short, long, due, countdown, reflection, quote, grocery, everything).</p>
-        </div>
-      </div>
-    {% endif %}
-
-    {% if 'weather' in sections and weather %}
-      <div class="section">
-        <p class="section-title">Weather — rest of today</p>
-        <p class="weather-summary">{{ weather.summary }}</p>
-        {% if weather.hourly %}
-          {% for h in weather.hourly %}
-            <div class="weather-row">
-              <div class="weather-time">{{ h.time }}</div>
-              <div class="weather-temp">{{ h.temp }}°C</div>
-              <div class="weather-desc">{{ h.description }}</div>
-              <div class="weather-pop">{% if h.precip_pct %}{{ h.precip_pct }}%{% endif %}</div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">No hourly data available.</p>
-        {% endif %}
-      </div>
-    {% elif 'weather' in sections %}
-      <div class="section">
-        <p class="section-title">Weather</p>
-        <p class="empty">Weather unavailable.</p>
-      </div>
-    {% endif %}
-
-    {% if 'calendar' in sections %}
-      <div class="section">
-        <p class="section-title">Today's timeline</p>
-        {% if timeline %}
-          {% for ev in timeline %}
-            <div class="event{% if ev.past %} past{% endif %}{% if ev.is_due %} due{% endif %}">
-              <div class="event-time">{{ ev.time }}{% if ev.is_due %} · DUE{% endif %}</div>
-              <div class="event-title">{{ ev.title }}</div>
-              {% if ev.calendar_name %}<div class="event-cal">{{ ev.calendar_name }}</div>{% endif %}
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">Nothing on the calendar today.</p>
-        {% endif %}
-      </div>
-    {% endif %}
-
-    {% if 'long' in sections %}
-      <div class="section">
-        <p class="section-title">Long-term tasks</p>
-        {% if long_tasks %}
-          {% for t in long_tasks %}
-            <div class="long-row due-{{ t.color }}">
-              <div><strong>{{ t.text }}</strong></div>
-              <div class="when">{{ t.due }} · {{ t.humanized }}</div>
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">No long-term tasks. Use <code>add long task "X" due &lt;date&gt;</code>.</p>
-        {% endif %}
-      </div>
-    {% endif %}
-
-    {% if 'short' in sections %}
-      <div class="section">
-        <p class="section-title">Short-term tasks</p>
-        {% if short_tasks.main %}
-          {% for t in short_tasks.main %}
-            <div class="task">
-              <span class="bullet">○</span>{{ t.text }}
-              {% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">No short tasks. Use <code>add "your task"</code>.</p>
-        {% endif %}
-
-        {% for bucket_name, items in short_tasks.buckets.items() %}
-          <p class="bucket-title">{{ bucket_name }} bucket</p>
-          {% for t in items %}
-            <div class="task">
-              <span class="bullet">○</span>{{ t.text }}
-              {% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
-            </div>
-          {% endfor %}
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if 'grocery' in sections %}
-      <div class="section">
-        <p class="section-title">Grocery bucket</p>
-        {% set g = short_tasks.buckets.get('grocery', []) if short_tasks else [] %}
-        {% if g %}
-          {% for t in g %}
-            <div class="task">
-              <span class="bullet">○</span>{{ t.text }}
-              {% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">Grocery bucket is empty. Add with <code>add "milk" #grocery</code>.</p>
-        {% endif %}
-      </div>
-    {% endif %}
-
-    {% if ('countdowns' in sections or 'countdown' in sections) and countdowns %}
-      <div class="section">
-        <p class="section-title">Countdowns</p>
-        {% for c in countdowns %}
-          <div class="countdown">
-            <div>
-              <div class="countdown-name">{{ c.name }}</div>
-              <div class="countdown-target">target: {{ c.target }}</div>
-            </div>
-            <div class="countdown-label">{{ c.label }}</div>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if 'reflection' in sections and reflections %}
-      <div class="section">
-        <p class="section-title">Reflections</p>
-        {% for r in reflections %}
-          <div class="reflection">
-            <p class="reflection-text">{{ r.text }}</p>
-            <p class="reflection-meta">{{ r.period }} · clears {{ r.expires_at }} at 11:59 PM</p>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if 'quote' in sections and quote %}
-      <div class="quote">
-        <p class="quote-text">"{{ quote.text }}"</p>
-        {% if quote.author %}<p class="quote-author">— {{ quote.author }}</p>{% endif %}
-      </div>
-    {% endif %}
-
-    <div class="footer">
-      <strong>Quick commands</strong>
-      <code>add "task"</code> · <code>add "milk" #grocery</code> · <code>add long task "X" due 7 oct 2027</code><br>
-      <code>add countdown "M license" 2027-10-07</code> · <code>add reflection for week "topic"</code><br>
-      <code>done "task"</code> · <code>show calendar / weather / short / long / due / countdown "name"</code><br>
-      Full reference in <code>docs/commands.md</code>.
+    <div class="hr"></div>
+  {% elif 'weather' in sections %}
+    <div class="pad">
+      <p class="label">Weather</p>
+      <p class="err-reason">Weather unavailable.</p>
     </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── today's timeline ────────── -->
+  {% if 'calendar' in sections %}
+    <div class="pad">
+      <p class="label">Today · timeline</p>
+      {% if timeline %}
+        {% for ev in timeline %}
+          <table class="ev{% if ev.past %} past{% endif %}{% if ev.is_due %} due{% endif %}"><tr>
+            <td class="when">{{ ev.time }}</td>
+            <td class="body">
+              <div class="ttl">{{ ev.title }}{% if ev.is_due %}<span class="duetag">DUE</span>{% endif %}</div>
+              {% if ev.calendar_name %}<div class="cal">{{ ev.calendar_name }}</div>{% endif %}
+            </td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">Nothing on the calendar today.</p>
+      {% endif %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── long-term tasks ────────── -->
+  {% if 'long' in sections %}
+    <div class="pad">
+      <p class="label">Long-term</p>
+      {% if long_tasks %}
+        {% for t in long_tasks %}
+          <table class="row due-{{ t.color }}"><tr>
+            <td class="bar bar-{{ t.color }}"><div></div></td>
+            <td class="gap"></td>
+            <td>
+              <div class="title">{{ t.text }}</div>
+              <div class="submeta">{{ t.due }}<span class="dim">·</span><span class="accent">{{ t.humanized }}</span></div>
+            </td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">No long-term tasks. Use <code style="color:#ededed">add long task "X" due &lt;date&gt;</code>.</p>
+      {% endif %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── short tasks ────────── -->
+  {% if 'short' in sections %}
+    <div class="pad">
+      <p class="label">Short tasks</p>
+      {% if short_tasks.main %}
+        {% for t in short_tasks.main %}
+          <table class="task"><tr>
+            <td class="bx"><div></div></td>
+            <td class="txt">{{ t.text }}{% if t.due_at %}<span class="due">due {{ t.due_at }}</span>{% endif %}</td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">No short tasks. Use <code style="color:#ededed">add "your task"</code>.</p>
+      {% endif %}
+
+      {% for bucket_name, items in short_tasks.buckets.items() %}
+        <p class="bucket-label">// {{ bucket_name }}</p>
+        {% for t in items %}
+          <table class="task"><tr>
+            <td class="bx"><div></div></td>
+            <td class="txt">{{ t.text }}{% if t.due_at %}<span class="due">due {{ t.due_at }}</span>{% endif %}</td>
+          </tr></table>
+        {% endfor %}
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── grocery (partial) ────────── -->
+  {% if 'grocery' in sections %}
+    <div class="pad">
+      <p class="label">Grocery</p>
+      {% set g = short_tasks.buckets.get('grocery', []) if short_tasks else [] %}
+      {% if g %}
+        {% for t in g %}
+          <table class="task"><tr>
+            <td class="bx"><div></div></td>
+            <td class="txt">{{ t.text }}{% if t.due_at %}<span class="due">due {{ t.due_at }}</span>{% endif %}</td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">Grocery bucket is empty. <code style="color:#ededed">add "milk" #grocery</code>.</p>
+      {% endif %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── countdowns ────────── -->
+  {% if ('countdowns' in sections or 'countdown' in sections) and countdowns %}
+    <div class="pad">
+      <p class="label">Countdowns</p>
+      {% for c in countdowns %}
+        <table class="cd"><tr>
+          <td>
+            <div class="name">{{ c.name }}</div>
+            <div class="tgt">target {{ c.target }}</div>
+          </td>
+          <td align="right"><span class="lbl">{{ c.label }}</span></td>
+        </tr></table>
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── reflections ────────── -->
+  {% if 'reflection' in sections and reflections %}
+    <div class="pad">
+      <p class="label">Reflections</p>
+      {% for r in reflections %}
+        <div class="refl">
+          <p class="text">{{ r.text }}</p>
+          <p class="meta">{{ r.period }} · clears {{ r.expires_at }}</p>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── quote ────────── -->
+  {% if 'quote' in sections and quote %}
+    <div class="pad">
+      <p class="label">Quote of the day</p>
+      <div class="quote">
+        <p class="qtext">{{ quote.text }}</p>
+        {% if quote.author %}<p class="qauth">— {{ quote.author }}</p>{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- ────────── footer ────────── -->
+  <div class="footer">
+    <p class="ftitle">Reply to edit</p>
+    <p style="margin:0;font-size:12px;color:#707070;line-height:2;">
+      <code>add "task"</code>
+      <code>add "milk" #grocery</code>
+      <code>done "task"</code>
+      <code>show calendar</code>
+      <code>show weather</code>
+    </p>
+    <p>Full reference in <code style="color:#a1a1a1;border:none;background:transparent;padding:0;">docs/commands.md</code></p>
   </div>
+
+</div>
 </body>
 </html>
