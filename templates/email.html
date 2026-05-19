@@ -3,536 +3,706 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="color-scheme" content="dark only" />
+<meta name="supported-color-schemes" content="dark only" />
 <title>Daily Digest</title>
+<!--
+  DailyDigest — dark redesign
+  Pure-OLED-black, Vercel/Geist DNA, mobile-first.
+  All template variables match scripts/render.py + scripts/digest.py so this
+  is a drop-in replacement. premailer will inline the styles below.
+-->
 <style>
-  body { margin:0; padding:28px 14px; background:#0b0f1a;
-         font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
-         color:#dde3f0; line-height:1.55; }
-  sup { font-size:0.72em; line-height:0; vertical-align:super; }
-  a { color:#60a5fa; }
+  @import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
 
-  .container { max-width:620px; margin:0 auto; background:#141c2e;
-               border-radius:16px; overflow:hidden;
-               box-shadow:0 12px 40px rgba(0,0,0,0.55); }
+  body {
+    margin: 0; padding: 0;
+    background: #000;
+    font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    color: #ededed; line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  sup { font-size: 0.72em; line-height: 0; vertical-align: super; }
+  a { color: #0070F3; }
 
-  /* ── Header ───────────────────────────────────────────── */
-  .header { padding:30px 32px 24px;
-            background:linear-gradient(160deg,#1a2540 0%,#121929 100%);
-            border-bottom:1px solid #1e2d45;
-            border-top:3px solid #3b82f6; }
-  .date-label { font-size:12px; color:#6b7a94; text-transform:uppercase;
-                letter-spacing:2px; margin:0 0 6px; font-weight:600; }
-  .date-main  { font-size:28px; font-weight:700; color:#e8edf6; margin:0;
-                letter-spacing:-0.5px; }
+  .container { max-width: 620px; margin: 0 auto; background: #000; }
+  .pad   { padding: 22px 20px; }
+  .hr    { height: 1px; background: #1a1a1a; line-height: 0; font-size: 0; }
 
-  /* ── Sections ─────────────────────────────────────────── */
-  .section { padding:24px 32px; }
-  .section + .section { border-top:1px solid #1e2840; }
-  .section-title { font-size:11px; color:#5a6880; text-transform:uppercase;
-                   letter-spacing:2px; margin:0 0 16px; font-weight:700; }
+  /* meta row above the date */
+  .meta {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #707070; letter-spacing: 0.04em;
+    margin: 0 0 14px; white-space: nowrap;
+  }
+  .meta .dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 1px;
+    background: #0070F3; vertical-align: middle; margin-right: 8px;
+    box-shadow: 0 0 8px rgba(0,112,243,0.4);
+  }
+  .meta .wk    { color: #ededed; }
+  .meta .sep   { color: #4a4a4a; margin: 0 6px; }
+  .meta .iso   { float: right; color: #707070; }
 
-  /* ── Age ──────────────────────────────────────────────── */
-  .age-row { padding:16px 18px; background:#1c2538;
-             border-radius:12px; border-left:3px solid #b8963e; }
-  .age-line { font-size:15px; color:#dde3f0; margin:0; }
-  .age-sub  { font-size:13px; color:#8892ac; margin:8px 0 0; }
+  .date {
+    margin: 0; font-size: 34px; font-weight: 600;
+    color: #ededed; letter-spacing: -0.04em; line-height: 1.05;
+  }
 
-  /* ── Due dates ────────────────────────────────────────── */
-  .due { padding:14px 16px; border-radius:12px; margin-bottom:10px;
-         font-size:15px; border-left:4px solid transparent; }
-  .due:last-child { margin-bottom:0; }
-  .due-label { font-weight:600; }
-  .due-badge { display:inline-block; padding:3px 9px; border-radius:999px;
-               font-size:10px; font-weight:700; letter-spacing:0.8px;
-               text-transform:uppercase; margin-left:8px;
-               vertical-align:middle; white-space:nowrap; }
-  .due-when  { font-size:13px; opacity:0.8; margin-top:6px; }
+  .age {
+    margin-top: 18px; padding: 14px 14px; border-radius: 8px;
+    background: #080808; border: 1px solid #1a1a1a;
+  }
+  .age-line { font-size: 13px; color: #ededed; line-height: 1.45; margin: 0; }
+  .age-line strong { color: #0070F3; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .age-sub {
+    margin: 6px 0 0; font-size: 12px; color: #707070;
+    font-variant-numeric: tabular-nums; line-height: 1.4;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+  }
+  .age-sub .faint { color: #4a4a4a; }
 
-  .due-green      { background:#082918; color:#86efac; border-left-color:#16a34a; }
-  .due-yellow     { background:#1d1a05; color:#fde68a; border-left-color:#ca8a04; }
-  .due-orange     { background:#201408; color:#fdba74; border-left-color:#ea580c; }
-  .due-red-orange { background:#220e08; color:#fca5a5; border-left-color:#dc2626; }
-  .due-red        { background:#1a0808; color:#fca5a5; border-left-color:#b91c1c; }
-  .due-overdue    { background:#180204; color:#ff9090; border-left-color:#ef4444; }
-  .due-neutral    { background:#1a2235; color:#8892ac; border-left-color:#2d3d55; }
+  /* section label */
+  .label {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; font-weight: 600; letter-spacing: 0.16em;
+    text-transform: uppercase; color: #707070;
+    margin: 0 0 14px;
+  }
 
-  .badge-short    { background:rgba(59,130,246,0.22); color:#93c5fd; }
-  .badge-long     { background:rgba(167,139,250,0.22); color:#c4b5fd; }
-  .badge-calendar { background:rgba(251,146,60,0.22); color:#fdba74; }
-  .due-overdue .badge-short,
-  .due-overdue .badge-long,
-  .due-overdue .badge-calendar { background:rgba(255,255,255,0.12); color:#dde3f0; }
+  /* due rows + long tasks */
+  .row {
+    border-collapse: collapse; width: 100%; margin: 0;
+    border-bottom: 1px solid #111;
+  }
+  .row:last-child { border-bottom: none; }
+  .row td { vertical-align: middle; padding: 11px 0; }
+  .row td.bar { width: 3px; padding: 0; }
+  .row td.gap { width: 12px; }
+  .row .title {
+    font-size: 14px; color: #ededed; font-weight: 500; line-height: 1.3;
+  }
+  .row .tag {
+    float: right; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #5a5a5a; letter-spacing: 0.08em;
+    text-transform: uppercase; padding-left: 8px;
+  }
+  .row .submeta {
+    margin-top: 3px; font-size: 12px; color: #707070;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+  }
+  .row .submeta .accent { font-weight: 500; }
+  .row .submeta .dim    { color: #4a4a4a; margin: 0 6px; }
 
-  /* ── Changes / errors ─────────────────────────────────── */
-  .changes { background:#0a1f10; padding:18px 20px; border-radius:12px;
-             border-left:3px solid #16a34a; }
-  .changes-title { font-size:11px; color:#86efac; text-transform:uppercase;
-                   letter-spacing:2px; font-weight:700; margin:0 0 10px; }
-  .change-row { padding:5px 0; font-size:14px; color:#a7f3d0; }
-  .change-row.miss { color:#fca5a5; }
+  /* bar color variants */
+  .bar-green      { background: #50E3C2; }
+  .bar-yellow     { background: #FFE066; }
+  .bar-orange     { background: #F5A623; }
+  .bar-red-orange { background: #FF7849; }
+  .bar-red        { background: #FF4D4D; }
+  .bar-overdue    { background: #FF4D4D; }
+  .bar-neutral    { background: #2a2a2a; }
 
-  .errors { background:#1f0f08; padding:18px 20px; border-radius:12px;
-            border-left:3px solid #dc2626; margin-top:8px; }
-  .errors-title { font-size:11px; color:#fca5a5; text-transform:uppercase;
-                  letter-spacing:2px; font-weight:700; margin:0 0 10px; }
-  .err-line   { background:#2a1810; padding:7px 11px; border-radius:6px;
-                font-family:'SF Mono',Monaco,Consolas,monospace; font-size:12px;
-                color:#e2c8b0; margin-bottom:4px; }
-  .err-reason { font-size:12px; color:#fdba74; margin:0 0 10px 4px; }
+  /* due accent text colors */
+  .due-green     .accent { color: #50E3C2; }
+  .due-yellow    .accent { color: #FFE066; }
+  .due-orange    .accent { color: #F5A623; }
+  .due-red-orange .accent { color: #FF7849; }
+  .due-red       .accent { color: #FF4D4D; }
+  .due-overdue   .accent { color: #FF4D4D; }
+  .due-neutral   .accent { color: #a1a1a1; }
 
-  /* ── Weather ──────────────────────────────────────────── */
-  .weather-summary { font-size:14px; color:#8892ac; margin:0 0 14px; }
-  .weather-row { padding:10px 0; border-bottom:1px solid #1e2840;
-                 font-size:14px; line-height:1.5; }
-  .weather-row:last-child { border-bottom:none; }
-  .weather-time { display:inline-block; font-variant-numeric:tabular-nums;
-                  color:#60a5fa; min-width:54px; font-weight:600; }
-  .weather-temp { display:inline-block; font-weight:700; color:#fbbf24;
-                  min-width:50px; }
-  .weather-desc { color:#b0b8cc; }
-  .weather-pop  { display:inline-block; margin-left:6px; padding:2px 8px;
-                  border-radius:999px; background:rgba(59,130,246,0.2);
-                  color:#93c5fd; font-size:11px; font-weight:600;
-                  font-variant-numeric:tabular-nums; }
+  /* changes */
+  .changes      { display: block; }
+  .change-row   { font-size: 13px; color: #ededed; line-height: 1.5; padding: 2px 0; }
+  .change-row .glyph {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    color: #0070F3; margin-right: 8px; font-weight: 500; display: inline-block; width: 12px;
+  }
+  .change-row.miss { color: #FF4D4D; }
+  .change-row.miss .glyph { color: #FF4D4D; }
 
-  /* ── Calendar events ──────────────────────────────────── */
-  .event { padding:13px 0; border-bottom:1px solid #1e2840; }
-  .event:last-child { border-bottom:none; padding-bottom:0; }
-  .event:first-child { padding-top:0; }
-  .event-time  { font-size:12px; color:#fb923c; font-weight:700;
-                 font-variant-numeric:tabular-nums; letter-spacing:0.3px; }
-  .event-title { font-size:16px; color:#dde3f0; margin-top:4px; font-weight:500; }
-  .event-cal   { font-size:11px; color:#5a6880; margin-top:3px;
-                 text-transform:uppercase; letter-spacing:0.8px; }
-  .event.past .event-time  { text-decoration:line-through; color:#2d3a55; }
-  .event.past .event-title { text-decoration:line-through; color:#374151; font-weight:400; }
-  .event.past .event-cal   { text-decoration:line-through; color:#2d3a55; }
-  .event.due .event-time   { color:#ef4444; }
+  /* errors */
+  .errors-title { color: #FF7849; }
+  .err-line {
+    background: #0a0a0a; border: 1px solid #1f1f1f;
+    padding: 6px 10px; border-radius: 4px;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 12px; color: #ededed; margin-bottom: 4px;
+  }
+  .err-reason { font-size: 12px; color: #a1a1a1; margin: 0 0 10px 4px; line-height: 1.5; }
+  .err-reason code {
+    background: #111; color: #ededed; padding: 1px 6px; border-radius: 3px;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; border: 1px solid #1f1f1f;
+  }
 
-  /* ── Tasks ────────────────────────────────────────────── */
-  .task { padding:11px 0; font-size:16px; line-height:1.5;
-          color:#dde3f0; border-bottom:1px solid #1e2840; }
-  .task:last-child { border-bottom:none; padding-bottom:0; }
-  .task:first-child { padding-top:0; }
-  .bullet    { color:#60a5fa; font-weight:700; margin-right:10px; }
-  .task-due  { display:inline-block; font-size:12px; color:#6b7a94;
-               margin-left:8px; padding:2px 9px; border-radius:999px;
-               background:#1a2235; }
-  .bucket-title { font-size:11px; color:#5a6880; text-transform:uppercase;
-                  letter-spacing:1.4px; font-weight:700; margin:16px 0 10px; }
+  /* weather */
+  .weather-summary { font-size: 13px; color: #a1a1a1; margin: 0 0 14px; line-height: 1.45; }
+  .whrow {
+    border-collapse: collapse; width: 100%;
+    border-top: 1px solid #111;
+  }
+  .whrow:first-child { border-top: none; }
+  .whrow td { padding: 7px 0; font-size: 13px; vertical-align: middle; }
+  .whrow .t {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    color: #707070; font-size: 12px; font-variant-numeric: tabular-nums;
+    width: 48px; white-space: nowrap;
+  }
+  .whrow .temp {
+    color: #ededed; font-weight: 600; width: 40px; text-align: right;
+    font-variant-numeric: tabular-nums; padding-right: 4px;
+  }
+  .whrow .desc { color: #a1a1a1; font-size: 12px; padding-left: 8px; }
+  .whrow .pop {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #0070F3; font-variant-numeric: tabular-nums;
+    width: 36px; text-align: right; white-space: nowrap;
+  }
 
-  .long-row { padding:14px 16px; border-radius:12px; margin-bottom:8px;
-              font-size:15px; border-left:4px solid transparent; }
-  .long-row:last-child { margin-bottom:0; }
-  .long-row strong { font-weight:600; }
-  .long-row .when { display:block; font-size:13px; color:#8892ac; margin-top:6px; }
+  /* timeline */
+  .ev { border-collapse: collapse; width: 100%; border-top: 1px solid #111; }
+  .ev:first-child { border-top: none; }
+  .ev td { vertical-align: middle; padding: 10px 0; }
+  .ev .when {
+    width: 56px; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #0070F3; font-weight: 500;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .ev .body { padding-left: 12px; }
+  .ev .ttl { font-size: 14px; color: #ededed; font-weight: 500; line-height: 1.3; }
+  .ev .cal {
+    margin-top: 2px; font-size: 10px; color: #5a5a5a;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .ev.past .when, .ev.past .ttl { color: #5a5a5a; text-decoration: line-through; }
+  .ev.past .cal { color: #3a3a3a; }
+  .ev.due  .when { color: #FF4D4D; }
+  .ev .duetag {
+    margin-left: 8px; font-size: 10px; color: #FF4D4D;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    letter-spacing: 0.1em;
+  }
 
-  /* ── Countdown ────────────────────────────────────────── */
-  .countdown { padding:16px 18px; background:#1a1e35;
-               border-radius:12px; margin-bottom:10px;
-               border-left:3px solid #7c6abe; }
-  .countdown:last-child { margin-bottom:0; }
-  .countdown-name   { font-weight:600; color:#dde3f0; font-size:16px; }
-  .countdown-target { font-size:12px; color:#8892ac; margin-top:3px; }
-  .countdown-label  { display:inline-block; margin-top:10px;
-                      padding:4px 12px; border-radius:999px;
-                      background:#141824; border:1px solid #2a2f50;
-                      font-family:'SF Mono',Monaco,Consolas,monospace;
-                      font-size:13px; color:#a78bfa; font-weight:700;
-                      letter-spacing:0.4px; }
+  /* tasks */
+  .task { border-collapse: collapse; width: 100%; border-top: 1px solid #111; }
+  .task:first-child { border-top: none; }
+  .task td { vertical-align: middle; padding: 8px 0; }
+  .task .bx { width: 14px; }
+  .task .bx div {
+    width: 11px; height: 11px; border: 1px solid #2a2a2a; border-radius: 2px;
+  }
+  .task .txt { font-size: 14px; color: #ededed; line-height: 1.35; padding-left: 10px; }
+  .task .due {
+    display: block; margin-top: 2px; font-size: 11px; color: #707070;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .bucket-label {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #5a5a5a; letter-spacing: 0.12em;
+    text-transform: uppercase; margin: 18px 0 4px;
+  }
 
-  /* ── Reflection ───────────────────────────────────────── */
-  .reflection { padding:16px 18px; background:#1a2228;
-                border-radius:12px; margin-bottom:10px;
-                border-left:3px solid #2d6a8c; }
-  .reflection:last-child { margin-bottom:0; }
-  .reflection-text { font-size:15px; color:#dde3f0; margin:0; }
-  .reflection-meta { font-size:11px; color:#5a6880; margin:8px 0 0;
-                     text-transform:uppercase; letter-spacing:1px; }
+  /* recently completed */
+  .cdone { border-collapse: collapse; width: 100%; border-top: 1px solid #111; }
+  .cdone:first-child { border-top: none; }
+  .cdone td { vertical-align: middle; padding: 8px 0; }
+  .cdone .chk {
+    width: 14px;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    color: #50E3C2; font-size: 12px; font-weight: 600;
+  }
+  .cdone .txt {
+    padding-left: 10px; font-size: 13px; color: #5a5a5a;
+    text-decoration: line-through; line-height: 1.35;
+  }
+  .cdone .src {
+    margin-left: 8px; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 9px; color: #707070; letter-spacing: 0.12em;
+    text-transform: uppercase; text-decoration: none;
+  }
+  .cdone .when {
+    width: 1%; text-align: right; padding-left: 12px; white-space: nowrap;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #707070; font-variant-numeric: tabular-nums;
+  }
 
-  /* ── Completed tasks ──────────────────────────────────── */
-  .completed-row { padding:10px 0; font-size:15px; line-height:1.5;
-                   border-bottom:1px dashed #1e2840; }
-  .completed-row:last-child { border-bottom:none; padding-bottom:0; }
-  .completed-row:first-child { padding-top:0; }
-  .completed-check { color:#34d399; font-weight:700; margin-right:9px; }
-  .completed-text  { color:#374151; text-decoration:line-through; }
-  .completed-badge { display:inline-block; padding:2px 8px; border-radius:999px;
-                     font-size:10px; font-weight:700; letter-spacing:0.8px;
-                     text-transform:uppercase; margin-left:6px;
-                     vertical-align:middle; white-space:nowrap; }
-  .completed-when  { display:inline-block; margin-left:8px; font-size:12px;
-                     color:#374151; }
+  /* countdowns */
+  .cd {
+    background: #080808; border: 1px solid #1a1a1a; border-radius: 6px;
+    padding: 12px 14px; margin-bottom: 8px;
+    width: 100%; border-collapse: separate;
+  }
+  .cd .name { font-size: 13px; color: #ededed; font-weight: 500; line-height: 1.3; }
+  .cd .tgt {
+    margin-top: 2px; font-size: 11px; color: #707070;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .cd .lbl {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 14px; font-weight: 600; color: #0070F3;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
 
-  /* ── Concept2 ─────────────────────────────────────────── */
-  .c2-week-table { width:100%; border-collapse:collapse; margin-bottom:4px; }
-  .c2-day { text-align:center; padding:4px 2px; width:14.28%; }
-  .c2-day-name { display:block; font-size:10px; color:#5a6880;
-                 text-transform:uppercase; letter-spacing:1px;
-                 margin-bottom:8px; font-weight:600; }
-  .c2-day-bubble { display:block; width:38px; height:38px; border-radius:50%;
-                   margin:0 auto; line-height:38px; font-size:15px;
-                   font-weight:700; font-variant-numeric:tabular-nums; }
-  .c2-bubble-zero   { background:#1a2235; color:#2d3d55; }
-  .c2-bubble-active { background:#1e3a6e; color:#60a5fa; }
-  .c2-bubble-today  { background:#1e4080; color:#93c5fd;
-                      box-shadow:0 0 0 2px #3b82f6; }
-  .c2-bubble-future { background:#141c2e; color:#1e2840; }
-  .c2-week-totals { text-align:center; font-size:14px; color:#8892ac;
-                    margin:14px 0 20px; }
-  .c2-week-totals strong { color:#dde3f0; }
+  /* reflections */
+  .refl {
+    background: #080808; border: 1px solid #1a1a1a; border-radius: 6px;
+    border-left: 2px solid #50E3C2; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .refl .text { font-size: 13px; color: #ededed; line-height: 1.45; margin: 0; }
+  .refl .meta {
+    margin: 8px 0 0; font-size: 10px; color: #5a5a5a;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
 
-  .c2-stats-table { width:100%; border-collapse:separate; border-spacing:8px 0;
-                    margin:0 -8px 20px; }
-  .c2-stat-cell { background:#141e30; border-left:3px solid #2563eb;
-                  border-radius:10px; padding:14px 16px;
-                  vertical-align:top; width:50%; }
-  .c2-stat-title { font-size:10px; color:#5a6880; text-transform:uppercase;
-                   letter-spacing:1.4px; font-weight:700; margin:0 0 10px; }
-  .c2-stat-num  { font-size:22px; font-weight:700; color:#60a5fa;
-                  font-variant-numeric:tabular-nums; line-height:1.2; }
-  .c2-stat-sub  { font-size:12px; color:#8892ac; margin-top:4px;
-                  font-variant-numeric:tabular-nums; }
+  /* concept2 — week grid */
+  .c2wk { width: 100%; border-collapse: collapse; margin: 0 0 6px; table-layout: fixed; }
+  .c2wk td { text-align: center; padding: 4px 0; vertical-align: middle; }
+  .c2wk .day {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #5a5a5a; letter-spacing: 0.14em;
+    text-transform: uppercase; margin-bottom: 6px; display: block;
+  }
+  .c2wk .bub {
+    display: inline-block; width: 32px; height: 32px; line-height: 30px;
+    border-radius: 50%; font-size: 13px; font-weight: 600;
+    font-family: 'Geist', sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  .c2-zero   { background: #080808; color: #2a2a2a; border: 1px solid #1a1a1a; }
+  .c2-active { background: rgba(0,112,243,0.14); color: #0070F3; border: 1px solid rgba(0,112,243,0.35); }
+  .c2-today  { background: #0070F3; color: #ededed; border: 1px solid #0070F3; }
+  .c2-future { background: transparent; color: #2a2a2a; border: 1px dashed #1a1a1a; }
 
-  .c2-row { padding:12px 0; border-bottom:1px solid #1e2840;
-            font-size:14px; line-height:1.5; }
-  .c2-row:last-child { border-bottom:none; padding-bottom:0; }
-  .c2-row:first-child { padding-top:0; }
-  .c2-date    { font-weight:600; color:#dde3f0; }
-  .c2-metrics { color:#8892ac; margin-top:3px;
-                font-variant-numeric:tabular-nums; }
-  .c2-sep     { color:#2d3d55; margin:0 6px; }
-  .c2-extra   { font-size:12px; color:#5a6880; margin-top:3px; }
-  .c2-comments { font-size:12px; color:#4a5568; font-style:italic; margin-top:3px; }
+  .c2wktot {
+    text-align: center; font-size: 12px; color: #707070;
+    margin: 14px 0 18px; line-height: 1.5;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .c2wktot strong { color: #ededed; font-weight: 600; }
 
-  /* ── Quote ────────────────────────────────────────────── */
-  .quote { padding:28px 32px; border-top:1px solid #1a2235;
-           background:linear-gradient(135deg,#06090f 0%,#090d18 100%); }
-  .quote-text   { font-style:italic; font-size:15px; line-height:1.7;
-                  color:#b0bcd8; margin:0; }
-  .quote-author { font-size:12px; color:#354060; margin:12px 0 0;
-                  text-transform:uppercase; letter-spacing:1.5px; }
+  /* concept2 — stat cards */
+  .c2stats { width: 100%; border-collapse: separate; border-spacing: 8px 0;
+             margin: 0 -8px 14px; }
+  .c2stat {
+    background: #080808; border: 1px solid #1a1a1a; border-radius: 6px;
+    border-left: 2px solid #0070F3;
+    padding: 12px 14px; vertical-align: top; width: 50%;
+  }
+  .c2stat .title {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #707070; letter-spacing: 0.14em;
+    text-transform: uppercase; margin: 0 0 8px;
+  }
+  .c2stat .num {
+    font-size: 22px; font-weight: 600; color: #0070F3;
+    font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .c2stat .sub {
+    margin-top: 4px; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #707070;
+    font-variant-numeric: tabular-nums;
+  }
 
-  .empty { color:#374151; font-style:italic; font-size:14px; margin:0; }
+  /* concept2 — workout rows */
+  .c2row { border-collapse: collapse; width: 100%; border-top: 1px solid #111; }
+  .c2row:first-child { border-top: none; }
+  .c2row td { padding: 10px 0; vertical-align: middle; }
+  .c2row .date { font-size: 13px; color: #ededed; font-weight: 500; }
+  .c2row .metrics {
+    margin-top: 3px; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 11px; color: #a1a1a1; font-variant-numeric: tabular-nums;
+  }
+  .c2row .extra {
+    margin-top: 3px; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #707070; letter-spacing: 0.04em;
+  }
+  .c2row .cmt {
+    margin-top: 3px; font-size: 11px; color: #5a5a5a; font-style: italic;
+    line-height: 1.45;
+  }
+  .c2sep { color: #4a4a4a; margin: 0 6px; }
 
-  /* ── Footer ───────────────────────────────────────────── */
-  .footer { padding:20px 32px 24px; background:#0d1321;
-            border-top:1px solid #1a2235; font-size:12px;
-            color:#3d4a62; line-height:1.8; }
-  .footer strong { color:#5a6880; display:block; margin-bottom:6px;
-                   font-size:11px; text-transform:uppercase; letter-spacing:1.2px; }
-  .footer code { background:#1a2235; padding:2px 7px; border-radius:4px;
-                 font-family:'SF Mono',Monaco,Consolas,monospace;
-                 font-size:11px; color:#6b7a94; }
+  /* quote */
+  .quote {
+    padding: 18px 18px; background: #0a0a0a;
+    border: 1px solid #1a1a1a; border-radius: 8px;
+    position: relative;
+  }
+  .quote .qtext {
+    font-size: 14px; color: #ededed; line-height: 1.55;
+    font-style: italic; margin: 0; padding-left: 14px;
+    border-left: 2px solid #262626;
+  }
+  .quote .qauth {
+    margin: 12px 0 0; padding-left: 14px; font-size: 11px; color: #707070;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
 
-  /* ── Mobile (S21 = 360 css-px) ───────────────────────── */
+  /* footer */
+  .footer {
+    padding: 20px 20px 26px; border-top: 1px solid #1a1a1a;
+    background: #030303;
+  }
+  .footer .ftitle {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 10px; color: #5a5a5a; letter-spacing: 0.16em;
+    text-transform: uppercase; margin: 0 0 10px;
+  }
+  .footer code {
+    display: inline-block; background: #111; color: #ededed;
+    padding: 2px 6px; border-radius: 3px; font-size: 11px;
+    border: 1px solid #1f1f1f; margin: 2px 4px 2px 0;
+    font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
+  }
+  .footer p { margin: 12px 0 0; font-size: 11px; color: #5a5a5a; line-height: 1.55; }
+
+  /* mobile */
   @media only screen and (max-width: 520px) {
-    body { padding:12px 6px; }
-    .container { border-radius:14px; }
-    .header  { padding:24px 18px 20px; border-top-width:2px; }
-    .section { padding:20px 18px; }
-    .quote   { padding:24px 18px; }
-    .footer  { padding:18px 18px 22px; }
-    .date-main { font-size:24px; }
-
-    /* Due: badge below label on narrow */
-    .due { padding:14px 14px; font-size:15px; }
-    .due-badge  { display:block; margin-left:0; margin-top:7px; width:fit-content; }
-    .due-label  { display:block; }
-
-    /* Task due chip below task */
-    .task-due { display:block; margin-left:26px; margin-top:7px; }
-
-    /* Weather pop on its own line */
-    .weather-pop { margin-left:0; display:block; margin-top:5px;
-                   width:fit-content; }
-    .weather-time { min-width:46px; }
-    .weather-temp { min-width:44px; }
-
-    /* Long/countdown/reflection full padding */
-    .long-row   { padding:14px 14px; }
-    .countdown  { padding:16px 14px; }
-    .reflection { padding:16px 14px; }
-
-    /* Countdown label wraps below name */
-    .countdown-label { display:block; margin-top:10px; width:fit-content; }
-
-    /* Completed row */
-    .completed-badge { display:block; margin-left:0; margin-top:5px; }
-    .completed-when  { display:block; margin-left:26px; margin-top:4px; }
-
-    /* C2 week bubbles slightly smaller */
-    .c2-day-bubble { width:34px; height:34px; line-height:34px; font-size:14px; }
-    .c2-stats-table { border-spacing:0; margin:0 0 20px; }
-    .c2-stat-cell   { display:block; width:auto; margin-bottom:10px; }
+    .pad { padding: 18px 14px; }
+    .date { font-size: 28px; }
+    .meta .iso { float: none; display: block; margin-top: 4px; }
+    .c2wk .bub { width: 28px; height: 28px; line-height: 26px; font-size: 12px; }
+    .c2wk .day { font-size: 9px; letter-spacing: 0.1em; }
+    .c2stats { border-spacing: 0; margin: 0 0 14px; }
+    .c2stat { display: block; width: auto; margin-bottom: 8px; }
+    .cdone .when { padding-left: 8px; font-size: 10px; }
   }
 </style>
 </head>
 <body>
-  <div class="container">
+<div class="container">
 
-    <div class="header">
-      <p class="date-label">{{ weekday }} · {{ now_label }}</p>
-      <h1 class="date-main">{{ date_long }}</h1>
-      {% if 'age' in sections and age %}
-        <div class="age-row" style="margin-top:14px;">
-          <p class="age-line">You are <strong>{{ age.years }} years, {{ age.months }} months, {{ age.days }} days</strong> old today ({{ age.today_pretty }}).</p>
-          <p class="age-sub">{{ age.to_next_months }} months, {{ age.to_next_days }} days until you turn {{ age.next_age }} &nbsp;({{ age.to_next_total_days }} days total).</p>
-        </div>
+  <!-- ────────── header ────────── -->
+  <div class="pad">
+    <p class="meta">
+      <span class="dot"></span>
+      <span class="wk">{{ weekday }}</span>
+      <span class="sep">·</span>{{ now_label }}
+      {% if age and age.today_iso %}<span class="iso">{{ age.today_iso }}</span>{% endif %}
+    </p>
+    <h1 class="date">{{ date_long }}</h1>
+
+    {% if 'age' in sections and age %}
+      <div class="age">
+        <p class="age-line">You are <strong>{{ age.years }}y {{ age.months }}m {{ age.days }}d</strong> old today.</p>
+        <p class="age-sub">{{ age.to_next_months }}mo {{ age.to_next_days }}d → {{ age.next_age }}<span class="faint"> · {{ age.to_next_total_days }}d total</span></p>
+      </div>
+    {% endif %}
+  </div>
+  <div class="hr"></div>
+
+  <!-- ────────── due dashboard ────────── -->
+  {% if 'due' in sections and dues %}
+    <div class="pad">
+      <p class="label">Due · next 14 days</p>
+      {% for d in dues %}
+        <table class="row due-{{ d.color }}"><tr>
+          <td class="bar bar-{{ d.color }}"></td>
+          <td class="gap"></td>
+          <td>
+            <div class="title">{{ d.label }}<span class="tag">{{ d.source }}</span></div>
+            <div class="submeta"><span class="accent">{{ d.humanized }}</span><span class="dim">·</span>{{ d.when }}</div>
+          </td>
+        </tr></table>
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── what changed ────────── -->
+  {% if change_log or not_found %}
+    <div class="pad">
+      <p class="label">What changed</p>
+      <div class="changes">
+        {% for c in change_log %}
+          <div class="change-row"><span class="glyph">✓</span>{{ c }}</div>
+        {% endfor %}
+        {% for nf in not_found %}
+          <div class="change-row miss"><span class="glyph">×</span>{{ nf }} — not in list</div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── could not parse ────────── -->
+  {% if unknowns %}
+    <div class="pad">
+      <p class="label errors-title">Could not parse</p>
+      {% for subj, line, reason in unknowns %}
+        <div class="err-line">{{ line }}</div>
+        <p class="err-reason">{{ reason }}{% if subj %} (in: {{ subj }}){% endif %}</p>
+      {% endfor %}
+      <p class="err-reason">Valid verbs: <code>add</code> · <code>+</code> · <code>done</code> · <code>remove</code> · <code>delete</code> · <code>del</code> · <code>show</code>. <code>add</code>/<code>done</code>/<code>remove</code>/<code>delete</code>/<code>del</code> need a quoted "string". <code>show</code> takes a keyword (e.g. <code>show due</code>, <code>show short list</code>, <code>show countdown "name"</code>).</p>
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── weather ────────── -->
+  {% if 'weather' in sections and weather %}
+    <div class="pad">
+      <p class="label">Weather · rest of today</p>
+      <p class="weather-summary">{{ weather.summary }}</p>
+      {% if weather.hourly %}
+        {% for h in weather.hourly %}
+          <table class="whrow"><tr>
+            <td class="t">{{ h.time }}</td>
+            <td class="temp">{{ h.temp }}°</td>
+            <td class="desc">{{ h.description }}</td>
+            <td class="pop">{% if h.precip_pct %}{{ h.precip_pct }}%{% endif %}</td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">No hourly data available.</p>
       {% endif %}
     </div>
-
-    {% if 'due' in sections and dues %}
-      <div class="section">
-        <p class="section-title">Due within 14 days</p>
-        {% for d in dues %}
-          <div class="due due-{{ d.color }}">
-            <div><span class="due-label">{{ d.label }}</span><span class="due-badge badge-{{ d.source }}">{{ d.source_label }}</span></div>
-            <div class="due-when">{{ d.when }} · {{ d.humanized }}</div>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if change_log or not_found %}
-      <div class="section">
-        <p class="section-title">What changed</p>
-        <div class="changes">
-          {% for c in change_log %}
-            <div class="change-row">✓ {{ c }}</div>
-          {% endfor %}
-          {% for nf in not_found %}
-            <div class="change-row miss">✗ {{ nf }} — not found</div>
-          {% endfor %}
-        </div>
-      </div>
-    {% endif %}
-
-    {% if unknowns %}
-      <div class="section">
-        <p class="section-title">Could not parse</p>
-        <div class="errors">
-          {% for subj, line, reason in unknowns %}
-            <div class="err-line">{{ line }}</div>
-            <p class="err-reason">{{ reason }}{% if subj %} (in: {{ subj }}){% endif %}</p>
-          {% endfor %}
-          <p class="err-reason">Valid keywords: <code>add</code>, <code>done</code>, <code>show</code>. Use <code>show everything</code> for a full digest.</p>
-        </div>
-      </div>
-    {% endif %}
-
-    {% if 'weather' in sections and weather %}
-      <div class="section">
-        <p class="section-title">Weather · rest of today</p>
-        <p class="weather-summary">{{ weather.summary }}</p>
-        {% for h in weather.hourly %}
-          <div class="weather-row">
-            <span class="weather-time">{{ h.time }}</span>
-            <span class="weather-temp">{{ h.temp }}°C</span>
-            <span class="weather-desc">{{ h.description }}{% if h.precip_pct %}<span class="weather-pop">{{ h.precip_pct }}%</span>{% endif %}</span>
-          </div>
-        {% else %}
-          <p class="empty">No hourly data available.</p>
-        {% endfor %}
-      </div>
-    {% elif 'weather' in sections %}
-      <div class="section">
-        <p class="section-title">Weather</p>
-        <p class="empty">Weather unavailable.</p>
-      </div>
-    {% endif %}
-
-    {% if 'calendar' in sections %}
-      <div class="section">
-        <p class="section-title">Today's timeline</p>
-        {% if timeline %}
-          {% for ev in timeline %}
-            <div class="event{% if ev.past %} past{% endif %}{% if ev.is_due %} due{% endif %}">
-              <div class="event-time">{{ ev.time }}{% if ev.is_due %} · DUE{% endif %}</div>
-              <div class="event-title">{{ ev.title }}</div>
-              {% if ev.calendar_name %}<div class="event-cal">{{ ev.calendar_name }}</div>{% endif %}
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">Nothing on the calendar today.</p>
-        {% endif %}
-      </div>
-    {% endif %}
-
-    {% if 'long' in sections %}
-      <div class="section">
-        <p class="section-title">Long-term tasks</p>
-        {% if long_tasks %}
-          {% for t in long_tasks %}
-            <div class="long-row due-{{ t.color }}">
-              <strong>{{ t.text }}</strong>
-              <span class="when">{{ t.due }} · {{ t.humanized }}</span>
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">No long-term tasks. Use <code>add long task "X" due 7 oct 2027</code>.</p>
-        {% endif %}
-      </div>
-    {% endif %}
-
-    {% if 'short' in sections %}
-      <div class="section">
-        <p class="section-title">Short-term tasks</p>
-        {% if short_tasks.main %}
-          {% for t in short_tasks.main %}
-            <div class="task">
-              <span class="bullet">○</span><span>{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">No short tasks. Use <code>add "your task"</code>.</p>
-        {% endif %}
-        {% for bucket_name, items in short_tasks.buckets.items() %}
-          <p class="bucket-title">{{ bucket_name }} bucket</p>
-          {% for t in items %}
-            <div class="task">
-              <span class="bullet">○</span><span>{{ t.text }}</span>{% if t.due_at %}<span class="task-due">due {{ t.due_at }}</span>{% endif %}
-            </div>
-          {% endfor %}
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if 'grocery' in sections %}
-      <div class="section">
-        <p class="section-title">Grocery</p>
-        {% set g = short_tasks.buckets.get('grocery', []) if short_tasks else [] %}
-        {% if g %}
-          {% for t in g %}
-            <div class="task">
-              <span class="bullet">○</span><span>{{ t.text }}</span>
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">Grocery bucket is empty. Add with <code>add "milk" #grocery</code>.</p>
-        {% endif %}
-      </div>
-    {% endif %}
-
-    {% if 'completed' in sections and recent_completed %}
-      <div class="section">
-        <p class="section-title">Recently completed · last 3 days</p>
-        {% for c in recent_completed %}
-          <div class="completed-row">
-            <span class="completed-check">✓</span><span class="completed-text">{{ c.text }}</span><span class="completed-badge badge-{{ c.source }}">{{ c.source }}</span><span class="completed-when">{{ c.when }}</span>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if ('countdowns' in sections or 'countdown' in sections) and countdowns %}
-      <div class="section">
-        <p class="section-title">Countdowns</p>
-        {% for c in countdowns %}
-          <div class="countdown">
-            <div class="countdown-name">{{ c.name }}</div>
-            <div class="countdown-target">→ {{ c.target }}</div>
-            <div class="countdown-label">{{ c.label }}</div>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if 'reflection' in sections and reflections %}
-      <div class="section">
-        <p class="section-title">Reflections</p>
-        {% for r in reflections %}
-          <div class="reflection">
-            <p class="reflection-text">{{ r.text }}</p>
-            <p class="reflection-meta">{{ r.period }} · clears {{ r.expires_at }} 11:59 PM</p>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
-
-    {% if 'concept2' in sections and concept2 %}
-      <div class="section">
-        <p class="section-title">This week's cycling</p>
-
-        <table class="c2-week-table" cellspacing="0" cellpadding="0">
-          <tr>
-            {% for day in concept2.week_grid %}
-              <td class="c2-day">
-                <span class="c2-day-name">{{ day.day }}</span>
-                <span class="c2-day-bubble
-                  {%- if day.is_future %} c2-bubble-future
-                  {%- elif day.count == 0 and day.is_today %} c2-bubble-today
-                  {%- elif day.is_today and day.count > 0 %} c2-bubble-today
-                  {%- elif day.count > 0 %} c2-bubble-active
-                  {%- else %} c2-bubble-zero{%- endif %}">
-                  {%- if day.is_future %}·{%- else %}{{ day.count }}{%- endif %}
-                </span>
-              </td>
-            {% endfor %}
-          </tr>
-        </table>
-
-        <p class="c2-week-totals">
-          {% if concept2.week_count > 0 %}
-            <strong>{{ concept2.week_count }}</strong> ride{{ '' if concept2.week_count == 1 else 's' }} this week ·
-            <strong>{{ concept2.week_distance }}</strong> · {{ concept2.week_time }}
-          {% else %}
-            No rides logged this week yet.
-          {% endif %}
-        </p>
-
-        <table class="c2-stats-table" cellspacing="0" cellpadding="0">
-          <tr>
-            <td class="c2-stat-cell">
-              <p class="c2-stat-title">Last {{ concept2.window_days }} days</p>
-              <div class="c2-stat-num">{{ concept2.window_count }}</div>
-              <div class="c2-stat-sub">{{ concept2.window_distance }} · {{ concept2.window_time }}</div>
-            </td>
-            <td class="c2-stat-cell">
-              <p class="c2-stat-title">Lifetime</p>
-              <div class="c2-stat-num">{{ concept2.lifetime_count }}</div>
-              <div class="c2-stat-sub">{{ concept2.lifetime_distance }} · {{ concept2.lifetime_time }}</div>
-            </td>
-          </tr>
-        </table>
-
-        {% if concept2.workouts %}
-          {% for w in concept2.workouts %}
-            <div class="c2-row">
-              <div class="c2-date">{{ w.date_label }}</div>
-              <div class="c2-metrics">
-                {{ w.distance }}<span class="c2-sep">·</span>{{ w.time }}{% if w.pace %}<span class="c2-sep">·</span>{{ w.pace }}{% endif %}
-              </div>
-              {% if w.stroke_rate or w.heart_rate_avg or w.calories %}
-                <div class="c2-extra">
-                  {%- if w.stroke_rate %}{{ w.stroke_rate }} {{ w.rate_label }}{% endif %}
-                  {%- if w.heart_rate_avg %}{% if w.stroke_rate %} · {% endif %}{{ w.heart_rate_avg }} bpm avg{% endif %}
-                  {%- if w.calories %}{% if w.stroke_rate or w.heart_rate_avg %} · {% endif %}{{ w.calories }} cal{% endif %}
-                </div>
-              {% endif %}
-              {% if w.comments %}<div class="c2-comments">"{{ w.comments }}"</div>{% endif %}
-            </div>
-          {% endfor %}
-        {% else %}
-          <p class="empty">No rides in the last {{ concept2.window_days }} days.</p>
-        {% endif %}
-      </div>
-    {% endif %}
-
-    {% if 'quote' in sections and quote %}
-      <div class="quote">
-        <p class="quote-text">"{{ quote.text }}"</p>
-        {% if quote.author %}<p class="quote-author">— {{ quote.author }}</p>{% endif %}
-      </div>
-    {% endif %}
-
-    <div class="footer">
-      <strong>Quick commands</strong>
-      <code>add "task"</code> · <code>add "milk" #grocery</code> · <code>add long task "X" due 7 oct 2027</code><br>
-      <code>add countdown "event" 2027-10-07</code> · <code>add reflection for week "topic"</code><br>
-      <code>done "task"</code> · <code>show calendar / weather / short / long / due / everything</code>
+    <div class="hr"></div>
+  {% elif 'weather' in sections %}
+    <div class="pad">
+      <p class="label">Weather</p>
+      <p class="err-reason">Weather unavailable.</p>
     </div>
+    <div class="hr"></div>
+  {% endif %}
 
+  <!-- ────────── today's timeline ────────── -->
+  {% if 'calendar' in sections %}
+    <div class="pad">
+      <p class="label">Today · timeline</p>
+      {% if timeline %}
+        {% for ev in timeline %}
+          <table class="ev{% if ev.past %} past{% endif %}{% if ev.is_due %} due{% endif %}"><tr>
+            <td class="when">{{ ev.time }}</td>
+            <td class="body">
+              <div class="ttl">{{ ev.title }}{% if ev.is_due %}<span class="duetag">DUE</span>{% endif %}</div>
+              {% if ev.calendar_name %}<div class="cal">{{ ev.calendar_name }}</div>{% endif %}
+            </td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">Nothing on the calendar today.</p>
+      {% endif %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── long-term tasks ────────── -->
+  {% if 'long' in sections %}
+    <div class="pad">
+      <p class="label">Long-term</p>
+      {% if long_tasks %}
+        {% for t in long_tasks %}
+          <table class="row due-{{ t.color }}"><tr>
+            <td class="bar bar-{{ t.color }}"></td>
+            <td class="gap"></td>
+            <td>
+              <div class="title">{{ t.text }}</div>
+              <div class="submeta">{{ t.due }}<span class="dim">·</span><span class="accent">{{ t.humanized }}</span></div>
+            </td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">No long-term tasks. Use <code style="color:#ededed">add long task "X" due &lt;date&gt;</code>.</p>
+      {% endif %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── short tasks ────────── -->
+  {% if 'short' in sections %}
+    <div class="pad">
+      <p class="label">Short tasks</p>
+      {% if short_tasks.main %}
+        {% for t in short_tasks.main %}
+          <table class="task"><tr>
+            <td class="bx"><div></div></td>
+            <td class="txt">{{ t.text }}{% if t.due_at %}<span class="due">due {{ t.due_at }}</span>{% endif %}</td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">No short tasks. Use <code style="color:#ededed">add "your task"</code>.</p>
+      {% endif %}
+
+      {% for bucket_name, items in short_tasks.buckets.items() %}
+        <p class="bucket-label">// {{ bucket_name }}</p>
+        {% for t in items %}
+          <table class="task"><tr>
+            <td class="bx"><div></div></td>
+            <td class="txt">{{ t.text }}{% if t.due_at %}<span class="due">due {{ t.due_at }}</span>{% endif %}</td>
+          </tr></table>
+        {% endfor %}
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── grocery (partial) ────────── -->
+  {% if 'grocery' in sections %}
+    <div class="pad">
+      <p class="label">Grocery</p>
+      {% set g = short_tasks.buckets.get('grocery', []) if short_tasks else [] %}
+      {% if g %}
+        {% for t in g %}
+          <table class="task"><tr>
+            <td class="bx"><div></div></td>
+            <td class="txt">{{ t.text }}{% if t.due_at %}<span class="due">due {{ t.due_at }}</span>{% endif %}</td>
+          </tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">Grocery bucket is empty. <code style="color:#ededed">add "milk" #grocery</code>.</p>
+      {% endif %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── recently completed ────────── -->
+  {% if 'completed' in sections and recent_completed %}
+    <div class="pad">
+      <p class="label">Completed · last 3 days</p>
+      {% for c in recent_completed %}
+        <table class="cdone"><tr>
+          <td class="chk">✓</td>
+          <td class="txt">{{ c.text }}<span class="src">{{ c.source }}</span></td>
+          <td class="when">{{ c.when }}</td>
+        </tr></table>
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── countdowns ────────── -->
+  {% if ('countdowns' in sections or 'countdown' in sections) and countdowns %}
+    <div class="pad">
+      <p class="label">Countdowns</p>
+      {% for c in countdowns %}
+        <table class="cd"><tr>
+          <td>
+            <div class="name">{{ c.name }}</div>
+            <div class="tgt">target {{ c.target }}</div>
+          </td>
+          <td align="right"><span class="lbl">{{ c.label }}</span></td>
+        </tr></table>
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── reflections ────────── -->
+  {% if 'reflection' in sections and reflections %}
+    <div class="pad">
+      <p class="label">Reflections</p>
+      {% for r in reflections %}
+        <div class="refl">
+          <p class="text">{{ r.text }}</p>
+          <p class="meta">{{ r.period }} · clears {{ r.expires_at }}</p>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── concept2 cycling ────────── -->
+  {% if 'concept2' in sections and concept2 %}
+    <div class="pad">
+      <p class="label">Cycling · this week</p>
+
+      <table class="c2wk" cellspacing="0" cellpadding="0"><tr>
+        {% for day in concept2.week_grid %}
+          <td>
+            <span class="day">{{ day.day }}</span>
+            <span class="bub
+              {%- if day.is_future %} c2-future
+              {%- elif day.is_today %} c2-today
+              {%- elif day.count > 0 %} c2-active
+              {%- else %} c2-zero{%- endif %}">
+              {%- if day.is_future %}·{%- else %}{{ day.count }}{%- endif %}
+            </span>
+          </td>
+        {% endfor %}
+      </tr></table>
+
+      <p class="c2wktot">
+        {% if concept2.week_count > 0 %}
+          <strong>{{ concept2.week_count }}</strong> ride{{ '' if concept2.week_count == 1 else 's' }}
+          <span class="dim" style="color:#4a4a4a;margin:0 6px;">·</span>
+          <strong>{{ concept2.week_distance }}</strong>
+          <span class="dim" style="color:#4a4a4a;margin:0 6px;">·</span>
+          {{ concept2.week_time }}
+        {% else %}
+          No rides logged this week yet.
+        {% endif %}
+      </p>
+
+      <table class="c2stats" cellspacing="0" cellpadding="0"><tr>
+        <td class="c2stat">
+          <p class="title">Last {{ concept2.window_days }} days</p>
+          <div class="num">{{ concept2.window_count }}</div>
+          <div class="sub">{{ concept2.window_distance }} · {{ concept2.window_time }}</div>
+        </td>
+        <td class="c2stat">
+          <p class="title">Lifetime</p>
+          <div class="num">{{ concept2.lifetime_count }}</div>
+          <div class="sub">{{ concept2.lifetime_distance }} · {{ concept2.lifetime_time }}</div>
+        </td>
+      </tr></table>
+
+      {% if concept2.workouts %}
+        {% for w in concept2.workouts %}
+          <table class="c2row"><tr><td>
+            <div class="date">{{ w.date_label }}</div>
+            <div class="metrics">{{ w.distance }}<span class="c2sep">·</span>{{ w.time }}{% if w.pace %}<span class="c2sep">·</span>{{ w.pace }}{% endif %}</div>
+            {% if w.stroke_rate or w.heart_rate_avg or w.calories %}
+              <div class="extra">
+                {%- if w.stroke_rate %}{{ w.stroke_rate }} {{ w.rate_label }}{% endif %}
+                {%- if w.heart_rate_avg %}{% if w.stroke_rate %} · {% endif %}{{ w.heart_rate_avg }} bpm{% endif %}
+                {%- if w.calories %}{% if w.stroke_rate or w.heart_rate_avg %} · {% endif %}{{ w.calories }} cal{% endif %}
+              </div>
+            {% endif %}
+            {% if w.comments %}<div class="cmt">"{{ w.comments }}"</div>{% endif %}
+          </td></tr></table>
+        {% endfor %}
+      {% else %}
+        <p class="err-reason">No rides in the last {{ concept2.window_days }} days.</p>
+      {% endif %}
+    </div>
+    <div class="hr"></div>
+  {% endif %}
+
+  <!-- ────────── quote ────────── -->
+  {% if 'quote' in sections and quote %}
+    <div class="pad">
+      <p class="label">Quote of the day</p>
+      <div class="quote">
+        <p class="qtext">{{ quote.text }}</p>
+        {% if quote.author %}<p class="qauth">— {{ quote.author }}</p>{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- ────────── footer ────────── -->
+  <div class="footer">
+    <p class="ftitle">Reply to edit</p>
+    <p style="margin:0;font-size:12px;color:#707070;line-height:2;">
+      <code>add "task"</code>
+      <code>add "milk" #grocery</code>
+      <code>done "task"</code>
+      <code>show calendar</code>
+      <code>show weather</code>
+    </p>
+    <p>Full reference in <code style="color:#a1a1a1;border:none;background:transparent;padding:0;">docs/commands.md</code></p>
   </div>
+
+</div>
 </body>
 </html>
