@@ -78,12 +78,8 @@
     border-bottom: 1px solid #111;
   }
   .row:last-child { border-bottom: none; }
-  .row td { vertical-align: top; padding: 11px 0; }
-  .row td.bar { width: 2px; padding: 11px 0; }
-  .row td.bar div {
-    width: 2px; min-height: 36px; height: 100%; border-radius: 1px;
-    background: #50E3C2;
-  }
+  .row td { vertical-align: middle; padding: 11px 0; }
+  .row td.bar { width: 3px; padding: 0; }
   .row td.gap { width: 12px; }
   .row .title {
     font-size: 14px; color: #ededed; font-weight: 500; line-height: 1.3;
@@ -101,14 +97,14 @@
   .row .submeta .accent { font-weight: 500; }
   .row .submeta .dim    { color: #4a4a4a; margin: 0 6px; }
 
-  /* bar color variants — td.bar.bar-X div gets the color */
-  .bar-green     div { background: #50E3C2; }
-  .bar-yellow    div { background: #FFE066; }
-  .bar-orange    div { background: #F5A623; }
-  .bar-red-orange div { background: #FF7849; }
-  .bar-red       div { background: #FF4D4D; }
-  .bar-overdue   div { background: #FF4D4D; box-shadow: 0 0 6px rgba(255,77,77,0.5); }
-  .bar-neutral   div { background: #2a2a2a; }
+  /* bar color variants — background directly on td for reliable full-height */
+  .bar-green      { background: #50E3C2; }
+  .bar-yellow     { background: #FFE066; }
+  .bar-orange     { background: #F5A623; }
+  .bar-red-orange { background: #FF7849; }
+  .bar-red        { background: #FF4D4D; }
+  .bar-overdue    { background: #FF4D4D; }
+  .bar-neutral    { background: #2a2a2a; }
 
   /* due accent text colors */
   .due-green     .accent { color: #50E3C2; }
@@ -171,11 +167,11 @@
   /* timeline */
   .ev { border-collapse: collapse; width: 100%; border-top: 1px solid #111; }
   .ev:first-child { border-top: none; }
-  .ev td { vertical-align: top; padding: 10px 0; }
+  .ev td { vertical-align: middle; padding: 10px 0; }
   .ev .when {
     width: 56px; font-family: 'Geist Mono', 'SF Mono', Monaco, Consolas, monospace;
     font-size: 11px; color: #0070F3; font-weight: 500;
-    font-variant-numeric: tabular-nums; padding-top: 1px; white-space: nowrap;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
   }
   .ev .body { padding-left: 12px; }
   .ev .ttl { font-size: 14px; color: #ededed; font-weight: 500; line-height: 1.3; }
@@ -196,9 +192,9 @@
   /* tasks */
   .task { border-collapse: collapse; width: 100%; border-top: 1px solid #111; }
   .task:first-child { border-top: none; }
-  .task td { vertical-align: top; padding: 8px 0; }
+  .task td { vertical-align: middle; padding: 8px 0; }
   .task .bx {
-    width: 14px; padding-top: 5px;
+    width: 14px;
   }
   .task .bx div {
     width: 11px; height: 11px; border: 1px solid #2a2a2a; border-radius: 2px;
@@ -310,7 +306,7 @@
       <p class="label">Due · next 14 days</p>
       {% for d in dues %}
         <table class="row due-{{ d.color }}"><tr>
-          <td class="bar bar-{{ d.color }}"><div></div></td>
+          <td class="bar bar-{{ d.color }}"></td>
           <td class="gap"></td>
           <td>
             <div class="title">{{ d.label }}<span class="tag">{{ d.source }}</span></div>
@@ -406,7 +402,7 @@
       {% if long_tasks %}
         {% for t in long_tasks %}
           <table class="row due-{{ t.color }}"><tr>
-            <td class="bar bar-{{ t.color }}"><div></div></td>
+            <td class="bar bar-{{ t.color }}"></td>
             <td class="gap"></td>
             <td>
               <div class="title">{{ t.text }}</div>
