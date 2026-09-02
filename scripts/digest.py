@@ -285,8 +285,23 @@ def _sections_for_partials(partials: set[str]) -> set[str]:
     return sections
 
 
+def _force_full() -> bool:
+    """A manual run means a human asked for a digest right now, so send one even
+    outside SCHEDULED_HOURS — useful for previewing a template change without
+    waiting for the next scheduled slot.
+
+    GitHub Actions sets GITHUB_EVENT_NAME itself, so this needs no workflow
+    change: a hand-triggered run is `workflow_dispatch`, while the cron path
+    arrives as `repository_dispatch` and is deliberately left alone.
+    FORCE_FULL_DIGEST stays available for running the script by hand.
+    """
+    if (os.environ.get("FORCE_FULL_DIGEST") or "").strip().lower() in {"1", "true", "yes"}:
+        return True
+    return os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+
+
 def _decide_email(now: datetime, inbox: dict) -> tuple[str | None, set[str]]:
-    scheduled = now.hour in SCHEDULED_HOURS
+    scheduled = now.hour in SCHEDULED_HOURS or _force_full()
     has_changes = bool(inbox["change_log"] or inbox["not_found"])
     has_unknowns = bool(inbox["unknowns"])
     show_full = inbox["show_full"]
