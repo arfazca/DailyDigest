@@ -171,6 +171,22 @@ def shape_timeline(events: list[dict], now: datetime) -> list[dict]:
     return out
 
 
+def _rain_window(hourly: list[dict], threshold: int = 30) -> str:
+    """First contiguous run of hours at or above `threshold` chance of rain."""
+    wet = [h for h in hourly if (h.get("precip_pct") or 0) >= threshold]
+    if not wet:
+        return ""
+    start = wet[0]
+    end = start
+    for h in wet[1:]:
+        idx_prev = hourly.index(end)
+        if hourly.index(h) == idx_prev + 1:
+            end = h
+        else:
+            break
+    return start["time"] if start is end else f"{start['time']}\u2013{end['time']}"
+
+
 def shape_weather(weather: dict | None) -> dict | None:
     if not weather:
         return None
@@ -179,11 +195,32 @@ def shape_weather(weather: dict | None) -> dict | None:
         hourly.append({
             "time": h["dt"].strftime("%-I %p").lower(),
             "temp": h["temp"],
+            "feels_like": h.get("feels_like"),
             "summary": h["summary"],
             "description": h["description"],
             "precip_pct": h["pop"],
+            "humidity": h.get("humidity"),
+            "wind_kph": h.get("wind_kph"),
+            "gust_kph": h.get("gust_kph"),
+            "uvi": h.get("uvi"),
+            "clouds": h.get("clouds"),
         })
-    return {"summary": weather.get("summary", ""), "hourly": hourly}
+
+    temps = [h["temp"] for h in hourly]
+    winds = [h["wind_kph"] for h in hourly if h.get("wind_kph") is not None]
+    hums = [h["humidity"] for h in hourly if h.get("humidity") is not None]
+    uvis = [h["uvi"] for h in hourly if h.get("uvi") is not None]
+
+    return {
+        "summary": weather.get("summary", ""),
+        "hourly": hourly,
+        "high": max(temps) if temps else None,
+        "low": min(temps) if temps else None,
+        "peak_wind": max(winds) if winds else None,
+        "peak_humidity": max(hums) if hums else None,
+        "peak_uvi": max(uvis) if uvis else None,
+        "rain_window": _rain_window(hourly),
+    }
 
 
 def shape_short_tasks(rows: list[dict]) -> dict:
@@ -422,9 +459,24 @@ def shape_concept2(data: dict | None, now: datetime) -> dict | None:
     }
 
 
+# premailer inlines the <style> block and drops BOTH `@import` and `<link>`, so the
+# webfont has to be re-attached after inlining or it never reaches the client. Mail
+# apps that support webfonts (Apple Mail on macOS/iOS) then render Geist; everything
+# else — Gmail, Outlook, Samsung Mail — falls through to the system stack that is
+# already inlined on every element, which the layout is built to survive.
+_FONT_LINK = (
+    '<link rel="stylesheet" href="https://fonts.googleapis.com/css2'
+    '?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600'
+    '&display=swap" />'
+)
+
+
 def render(sections: set[str], context: dict) -> str:
     tpl = Template(TEMPLATE_FILE.read_text())
     ctx = dict(context)
     ctx["sections"] = sections
     rendered = tpl.render(**ctx)
-    return transform(rendered)
+    inlined = transform(rendered)
+    if "</head>" in inlined:
+        inlined = inlined.replace("</head>", _FONT_LINK + "</head>", 1)
+    return inlined

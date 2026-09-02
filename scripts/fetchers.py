@@ -170,9 +170,17 @@ def _extract_hourly_entry(h: dict, is_forecast_list: bool) -> dict:
         main = h.get("main") or {}
         temp = round(main.get("temp", 0))
         feels_like = round(main.get("feels_like", 0))
+        humidity = main.get("humidity")
+        wind_ms = (h.get("wind") or {}).get("speed")
+        gust_ms = (h.get("wind") or {}).get("gust")
+        uvi = None
     else:
         temp = round(h.get("temp", 0))
         feels_like = round(h.get("feels_like", 0))
+        humidity = h.get("humidity")
+        wind_ms = h.get("wind_speed")
+        gust_ms = h.get("wind_gust")
+        uvi = h.get("uvi")
     return {
         "temp": temp,
         "feels_like": feels_like,
@@ -180,6 +188,12 @@ def _extract_hourly_entry(h: dict, is_forecast_list: bool) -> dict:
         "description": weather0.get("description", ""),
         "icon": weather0.get("icon", ""),
         "pop": round((h.get("pop") or 0) * 100),
+        # already present in the payload we pay for — no extra request
+        "humidity": humidity,
+        "wind_kph": round(wind_ms * 3.6) if wind_ms is not None else None,
+        "gust_kph": round(gust_ms * 3.6) if gust_ms is not None else None,
+        "uvi": round(uvi) if uvi is not None else None,
+        "clouds": h.get("clouds") if not is_forecast_list else (h.get("clouds") or {}).get("all"),
     }
 
 
