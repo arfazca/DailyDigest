@@ -1,8 +1,10 @@
 name: Daily Digest
 
+# cron-job.org fires this hourly through the workflow-dispatch API
+# (docs/cronjob-setup.md), so workflow_dispatch is BOTH the scheduled path and
+# the manual one. Nothing may treat the event type as "the user asked for a
+# digest" — digest.py decides that from the clock and the inbox.
 on:
-  repository_dispatch:
-    types: [cron-trigger]
   workflow_dispatch:
 
 jobs:
