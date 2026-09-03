@@ -6,6 +6,19 @@ GitHub Actions has an unreliable built-in cron scheduler that can run 1-3 hours 
 
 cron-job.org sends an HTTP POST to GitHub's workflow dispatch API every hour. GitHub receives it, queues the workflow run immediately, and the script runs within seconds.
 
+**The hourly run is a poller, not a sender.** It exists so that replies to the digest are read within the hour. Most runs send nothing and exit; that is the expected outcome, and a green run in the Actions tab does not mean an email went out. Mail is only produced when the local hour is in `SCHEDULED_HOURS` (`{0, 6, 12, 18}` in `scripts/digest.py`), when the inbox asked for a `show`, or when the inbox produced changes or parse errors.
+
+> **Do not key "send a digest" off the GitHub event type.** Because cron-job.org
+> fires through the *workflow dispatch* API, every scheduled ping arrives as
+> `workflow_dispatch` — exactly the same event as clicking "Run workflow" by hand.
+> The two are indistinguishable. Treating that event as a request for a digest
+> turns this hourly keep-alive into an hourly email. The workflow declares
+> `workflow_dispatch` and nothing else; the send decision belongs to
+> `_decide_email()` in `scripts/digest.py`.
+
+To send one on demand, reply to the digest with `show everything`, or run the
+script locally with `FORCE_FULL_DIGEST=1`.
+
 ## Prerequisites
 
 - A GitHub account with the DailyDigest repo

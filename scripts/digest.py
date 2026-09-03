@@ -14,7 +14,7 @@ import render
 import sender
 
 
-SCHEDULED_HOURS = {6, 12, 18}
+SCHEDULED_HOURS = {0, 6, 12, 18}   # local time; a true six-hour cycle
 
 
 def _now(tz: ZoneInfo) -> datetime:

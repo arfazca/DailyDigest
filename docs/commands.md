@@ -113,13 +113,13 @@ Notes:
 
 Every run produces **at most one** email, decided as follows (in order):
 
-1. **Full digest:** sent if it's 6 AM, 12 PM, or 6 PM local, or if you sent `show everything`, `show current`, or bare `show`.
+1. **Full digest:** sent if it's midnight, 6 AM, noon, or 6 PM local, or if you sent `show everything`, `show current`, or bare `show`.
 2. **Partial show email:** sent if you requested any partial `show <X>` output. If the same run also has add/done/etc., a "What changed" banner is included.
 3. **Tasks-updated email:** sent if there were add/done/etc. commands and no scheduled hour and no `show`. It contains the "What changed" banner plus the rest-of-day calendar and weather only.
 4. **Errors-only email:** sent only if a line started with a keyword but failed to parse and nothing else happened.
 5. Otherwise silent.
 
-The 6 AM digest additionally shows your **age** (years/months/days) and how far you are from your next birthday.
+Every full digest shows your **age** (years/months/days) and how far you are from your next birthday.
 
 ## Due-date colors
 

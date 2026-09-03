@@ -1,12 +1,12 @@
 # DailyDigest
 
-A self-hosted email digest for tasks, calendar, weather, and reminders. At 6 AM, 12 PM, and 6 PM you get a digest that combines:
+A self-hosted email digest for tasks, calendar, weather, and reminders. Every six hours — midnight, 6 AM, noon and 6 PM local — you get a digest that combines:
 
 - A **due-date dashboard** with traffic-light coloring (green → red as deadlines approach)
 - **Hourly weather** for the rest of the day (OpenWeather One Call)
 - An **aggregated timeline** of every ICS calendar you've added, with past events shown greyed-out for context
 - **Short-term** and **long-term** task lists (with optional due dates, optional `#grocery` bucket)
-- **Countdowns**, **reflections**, **age** (at 6 AM), and a daily quote
+- **Countdowns**, **reflections**, **age**, and a daily quote
 
 Tasks, calendars, countdowns, and reflections are all managed by replying to the digest. Send `add "task"`, `add long task "X" due 7 oct 2027`, `show calendar`, `done "X"`. The full command grammar is in [docs/commands.md](docs/commands.md).
 
@@ -187,13 +187,13 @@ The parser only acts on lines that **begin with a verb** (`add`, `+`, `done`, `r
 
 Each run produces at most **one** email, decided as:
 
-1. **Full digest:** sent at 6 AM / 12 PM / 6 PM, or when you sent `show` / `show everything` / `show current`. Includes a "What changed" banner if any task, calendar, countdown, or reflection commands were processed in that run.
+1. **Full digest:** sent at midnight / 6 AM / noon / 6 PM, or when you sent `show` / `show everything` / `show current`. Includes a "What changed" banner if any task, calendar, countdown, or reflection commands were processed in that run.
 2. **Partial show email:** sent when you request a specific `show <section>`. Includes "What changed" if other commands were processed too.
 3. **Tasks-updated email:** sent when you send commands outside scheduled hours and do not request a section. Includes the "What changed" banner plus the rest-of-day calendar and weather.
 4. **Errors-only email:** sent only if every keyword-starting line failed to parse and nothing else happened.
 5. Otherwise silent.
 
-The 6 AM digest additionally shows your age (years/months/days) and how far you are from your next birthday.
+Every full digest shows your age (years/months/days) and how far you are from your next birthday.
 
 ## Email examples
 
@@ -240,16 +240,32 @@ All variables are passed as GitHub repository secrets and read by `scripts/diges
 
 ### Schedule
 
-Defined in `.github/workflows/daily-email.yml`. The workflow has two triggers:
+**The workflow runs hourly, but it is a poller, not a sender.** cron-job.org pings
+it every hour so replies to the digest are picked up within the hour. Whether that
+run produces an email is decided in Python, by the clock and the inbox — never by
+the workflow.
 
-- `repository_dispatch` with type `cron-trigger`: used by cron-job.org.
-- `workflow_dispatch`: manual trigger via the Actions UI.
+`.github/workflows/daily-email.yml` has exactly one trigger, `workflow_dispatch`,
+because cron-job.org fires through the workflow-dispatch API. That means **the
+scheduled ping and a manual "Run workflow" click are the same event** and cannot be
+told apart. Anything that treats `workflow_dispatch` as "the user asked for a
+digest" turns the hourly keep-alive into an hourly email — this happened once, and
+it is why the check lives in `_decide_email()` and not in the workflow.
 
-The decision of *what* to send happens inside the Python script, not the workflow. See `_decide_email()` in [scripts/digest.py](scripts/digest.py). To change the digest hours:
+To change the digest hours, edit [scripts/digest.py](scripts/digest.py):
 
 ```python
-SCHEDULED_HOURS = {6, 12, 18}
+SCHEDULED_HOURS = {0, 6, 12, 18}   # local time
 ```
+
+To send one on demand without waiting for the next slot, either reply to the digest
+with `show everything`, or run the script yourself with the override set:
+
+```bash
+FORCE_FULL_DIGEST=1 python scripts/digest.py
+```
+
+`FORCE_FULL_DIGEST` is opt-in and the scheduler never sets it, so it cannot misfire.
 
 ### Customising the digest email
 
@@ -259,7 +275,7 @@ Section flags the renderer can pass in `sections`:
 
 | Section name  | Renders                                  |
 | ------------- | ---------------------------------------- |
-| `age`         | Age line (6 AM only)                     |
+| `age`         | Age and days to next birthday            |
 | `due`         | Due-date dashboard                       |
 | `weather`     | Hourly weather forecast                  |
 | `calendar`    | Aggregated ICS timeline with past events |
@@ -339,7 +355,7 @@ The same lines are also `print()`-ed to stdout, so they're visible in the GitHub
 ```text
 .
 ├── .github/workflows/
-│   ├── daily-email.yml         Main workflow, triggered hourly via cron-job.org.
+│   ├── daily-email.yml         Main workflow, pinged hourly by cron-job.org.
 │   └── cleanup.yml             Deletes daily-email runs older than 2 days.
 ├── docs/
 │   ├── commands.md             Full command grammar + parser rules.
@@ -407,7 +423,7 @@ A run that processes a `show calendar` email at 2 PM logs:
 
 | Goal | File | Where |
 | --- | --- | --- |
-| Change digest send times | `scripts/digest.py` | `SCHEDULED_HOURS = {6, 12, 18}` |
+| Change digest send times | `scripts/digest.py` | `SCHEDULED_HOURS = {0, 6, 12, 18}` |
 | Add a new command verb | `scripts/parser.py` | extend `VERBS` + add a handler |
 | Add a new section to the digest | `templates/email.html` + `scripts/digest.py` | `_build_context` / `_full_sections` |
 | Change due-color thresholds | `scripts/render.py` | `_color_for_days` |
